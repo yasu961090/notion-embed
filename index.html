@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deep Research</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f7f6f3;
+      color: #37352f;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      color: #1a1a1a;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #9b9a97;
+      margin-bottom: 2rem;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.65rem 1rem;
+      border: 1.5px solid #d3d3d3;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus { border-color: #2eaadc; }
+
+    .model-select {
+      padding: 0.65rem 0.75rem;
+      border: 1.5px solid #d3d3d3;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      background: #fff;
+      cursor: pointer;
+      outline: none;
+    }
+
+    button#start-btn {
+      padding: 0.65rem 1.4rem;
+      background: #2eaadc;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    button#start-btn:hover { background: #0e96d4; }
+    button#start-btn:disabled { background: #aecfe8; cursor: not-allowed; }
+
+    .status-bar {
+      font-size: 0.85rem;
+      color: #6b7280;
+      min-height: 1.4rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .spinner {
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #d1d5db;
+      border-top-color: #2eaadc;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .search-log {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      max-height: 160px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .search-log-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #9b9a97;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+
+    .search-item {
+      font-size: 0.85rem;
+      color: #4b5563;
+      padding: 0.2rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .search-item::before { content: "🔍"; font-size: 0.8rem; }
+
+    .report-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 1.5rem 2rem;
+      display: none;
+    }
+
+    .report-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .btn-sm {
+      padding: 0.35rem 0.9rem;
+      font-size: 0.8rem;
+      border: 1.5px solid #d3d3d3;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      color: #37352f;
+      transition: background 0.1s;
+    }
+
+    .btn-sm:hover { background: #f3f4f6; }
+
+    /* Markdown rendered output */
+    #report-output h1, #report-output h2, #report-output h3 {
+      margin: 1.2em 0 0.4em;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    #report-output h1 { font-size: 1.5rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+    #report-output h2 { font-size: 1.2rem; }
+    #report-output h3 { font-size: 1rem; }
+
+    #report-output p { margin: 0.6em 0; line-height: 1.7; }
+
+    #report-output ul, #report-output ol {
+      margin: 0.5em 0 0.5em 1.5em;
+      line-height: 1.7;
+    }
+
+    #report-output li { margin: 0.25em 0; }
+
+    #report-output strong { font-weight: 700; }
+
+    #report-output code {
+      background: #f3f4f6;
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+      font-size: 0.88em;
+      font-family: "SF Mono", Menlo, monospace;
+    }
+
+    #report-output pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 1em;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0.8em 0;
+    }
+
+    #report-output pre code { background: none; color: inherit; padding: 0; }
+
+    #report-output blockquote {
+      border-left: 4px solid #2eaadc;
+      padding-left: 1em;
+      color: #6b7280;
+      margin: 0.8em 0;
+    }
+
+    #report-output hr {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+      margin: 1.2em 0;
+    }
+
+    .error-box {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1rem;
+      color: #dc2626;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .server-url-hint {
+      font-size: 0.8rem;
+      color: #9b9a97;
+      margin-bottom: 1.5rem;
+    }
+
+    .server-url-hint input {
+      padding: 0.3rem 0.6rem;
+      border: 1px solid #d3d3d3;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      width: 260px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Deep Research</h1>
+    <p class="subtitle">Claude API を使った多段階ウェブリサーチ</p>
+
+    <div class="server-url-hint">
+      API サーバー URL:
+      <input type="text" id="server-url" value="http://localhost:8000" placeholder="http://localhost:8000" />
+    </div>
+
+    <div class="input-row">
+      <input type="text" id="topic-input" placeholder="リサーチしたいトピックを入力..." />
+      <select class="model-select" id="model-select">
+        <option value="claude-opus-4-7">Opus 4.7</option>
+        <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+        <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+      </select>
+      <button id="start-btn" onclick="startResearch()">リサーチ開始</button>
+    </div>
+
+    <div class="status-bar">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-text"></span>
+    </div>
+
+    <div class="search-log" id="search-log">
+      <div class="search-log-title">検索クエリ</div>
+      <div id="search-items"></div>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <div class="report-card" id="report-card">
+      <div class="report-actions">
+        <button class="btn-sm" onclick="copyMarkdown()">Markdown コピー</button>
+        <button class="btn-sm" onclick="copyText()">テキスト コピー</button>
+      </div>
+      <div id="report-output"></div>
+    </div>
+  </div>
+
+  <!-- Minimal Markdown renderer (no external deps) -->
+  <script>
+    function renderMarkdown(md) {
+      let html = md
+        // Escape HTML first
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        // Headings
+        .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+        .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+        .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+        // HR
+        .replace(/^---$/gm, "<hr>")
+        // Bold / italic
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>")
+        // Inline code
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        // Blockquote
+        .replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>")
+        // Unordered list items
+        .replace(/^[\*\-] (.+)$/gm, "<li>$1</li>")
+        // Ordered list items
+        .replace(/^\d+\. (.+)$/gm, "<li>$1</li>")
+        // Paragraphs (double newline)
+        .replace(/\n\n/g, "</p><p>")
+        .replace(/\n/g, "<br>");
+
+      // Wrap consecutive <li> in <ul>
+      html = html.replace(/(<li>.*?<\/li>)(\s*<li>.*?<\/li>)*/gs, match => `<ul>${match}</ul>`);
+
+      return "<p>" + html + "</p>";
+    }
+
+    let rawMarkdown = "";
+
+    async function startResearch() {
+      const topic = document.getElementById("topic-input").value.trim();
+      if (!topic) { alert("トピックを入力してください"); return; }
+
+      const serverUrl = document.getElementById("server-url").value.trim().replace(/\/$/, "");
+      const model = document.getElementById("model-select").value;
+
+      // Reset UI
+      rawMarkdown = "";
+      document.getElementById("report-card").style.display = "none";
+      document.getElementById("report-output").innerHTML = "";
+      document.getElementById("search-log").style.display = "none";
+      document.getElementById("search-items").innerHTML = "";
+      document.getElementById("error-box").style.display = "none";
+      document.getElementById("start-btn").disabled = true;
+      document.getElementById("spinner").style.display = "block";
+      setStatus("リサーチを開始しています...");
+
+      try {
+        const resp = await fetch(`${serverUrl}/research/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic, model }),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || resp.statusText);
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            let event;
+            try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+            if (event.type === "search") {
+              document.getElementById("search-log").style.display = "block";
+              const item = document.createElement("div");
+              item.className = "search-item";
+              item.textContent = event.query;
+              document.getElementById("search-items").appendChild(item);
+              setStatus(`検索中: ${event.query}`);
+            }
+
+            if (event.type === "chunk") {
+              rawMarkdown += event.text;
+              document.getElementById("report-card").style.display = "block";
+              document.getElementById("report-output").innerHTML = renderMarkdown(rawMarkdown);
+              setStatus("レポートを生成しました");
+            }
+
+            if (event.type === "done") {
+              setStatus("完了");
+            }
+
+            if (event.type === "error") {
+              throw new Error(event.message);
+            }
+          }
+        }
+      } catch (err) {
+        const box = document.getElementById("error-box");
+        box.style.display = "block";
+        box.textContent = "エラー: " + err.message;
+        setStatus("");
+      } finally {
+        document.getElementById("start-btn").disabled = false;
+        document.getElementById("spinner").style.display = "none";
+      }
+    }
+
+    function setStatus(msg) {
+      document.getElementById("status-text").textContent = msg;
+    }
+
+    function copyMarkdown() {
+      navigator.clipboard.writeText(rawMarkdown).then(() => alert("Markdown をコピーしました"));
+    }
+
+    function copyText() {
+      const text = document.getElementById("report-output").innerText;
+      navigator.clipboard.writeText(text).then(() => alert("テキストをコピーしました"));
+    }
+
+    // Allow Enter key to start research
+    document.getElementById("topic-input").addEventListener("keydown", e => {
+      if (e.key === "Enter") startResearch();
+    });
+  </script>
+</body>
+</html>
