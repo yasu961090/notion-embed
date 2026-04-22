@@ -231,7 +231,6 @@
 <script>
 const $ = id => document.getElementById(id)
 
-// Load saved key
 window.onload = () => {
   const saved = localStorage.getItem('gemini_key')
   if (saved) {
@@ -301,28 +300,14 @@ async function summarize() {
   $('runBtn').disabled = true
   $('loader').classList.add('visible')
 
-  // Show thumbnail
   $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
   $('thumb').classList.add('visible')
 
-  const prompt = `以下のYouTube動画を日本語で要約してください。
-
-${cleanUrl}
-
-次の形式で出力してください：
-
-【概要】
-（動画のテーマや目的を2〜3文で）
-
-【主なポイント】
-• （重要な内容を箇条書きで5〜8点）
-
-【結論・まとめ】
-（最終的なメッセージや学び）`
+  const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${cleanUrl}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
