@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>YouTube 要約</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 20px 16px 40px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 16px;
+    color: #8b949e;
+    text-align: center;
+    margin-bottom: 24px;
+    letter-spacing: 0.05em;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  label {
+    font-size: 11px;
+    color: #8b949e;
+    display: block;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  input, textarea {
+    width: 100%;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    color: #e6edf3;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  input:focus, textarea:focus {
+    border-color: #58a6ff;
+  }
+  input[type="password"] {
+    letter-spacing: 0.1em;
+  }
+  .key-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .key-row input { flex: 1; }
+  .btn-save {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-save:active { opacity: 0.7; }
+  .key-status {
+    font-size: 11px;
+    margin-top: 6px;
+    color: #3fb950;
+    min-height: 16px;
+  }
+  .url-row {
+    display: flex;
+    gap: 8px;
+  }
+  .url-row input { flex: 1; }
+  .btn-paste {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-paste:active { opacity: 0.7; }
+  .btn-run {
+    width: 100%;
+    background: #1f6feb;
+    border: none;
+    color: #fff;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+  }
+  .btn-run:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .btn-run:active:not(:disabled) { opacity: 0.8; }
+  .result-card {
+    display: none;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 12px;
+  }
+  .result-card.visible { display: block; }
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .result-label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .btn-copy {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-copy:active { opacity: 0.7; }
+  .result-body {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+  }
+  .loader {
+    display: none;
+    text-align: center;
+    padding: 24px 0;
+    color: #8b949e;
+    font-size: 13px;
+  }
+  .loader.visible { display: block; }
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #30363d;
+    border-top-color: #58a6ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error {
+    display: none;
+    color: #f85149;
+    font-size: 13px;
+    padding: 10px 12px;
+    background: #2d1216;
+    border: 1px solid #f8514933;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+  .error.visible { display: block; }
+  .thumb {
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .thumb.visible { display: block; }
+</style>
+</head>
+<body>
+<h1>YouTube 要約ツール</h1>
+
+<!-- API Key -->
+<div class="card">
+  <label>Gemini API Key（無料）</label>
+  <div class="key-row">
+    <input type="password" id="apiKey" placeholder="AIza...">
+    <button class="btn-save" onclick="saveKey()">保存</button>
+  </div>
+  <div class="key-status" id="keyStatus"></div>
+</div>
+
+<!-- URL Input -->
+<div class="card">
+  <label>YouTube URL</label>
+  <div class="url-row">
+    <input type="url" id="ytUrl" placeholder="https://www.youtube.com/watch?v=...">
+    <button class="btn-paste" onclick="pasteUrl()">貼付</button>
+  </div>
+</div>
+
+<button class="btn-run" id="runBtn" onclick="summarize()">要約する</button>
+
+<div class="error" id="errorMsg"></div>
+
+<div class="loader" id="loader">
+  <div class="spinner"></div>
+  動画を解析中…
+</div>
+
+<div class="result-card" id="resultCard">
+  <div class="result-header">
+    <span class="result-label">要約結果</span>
+    <button class="btn-copy" onclick="copyResult()">コピー</button>
+  </div>
+  <img class="thumb" id="thumb" alt="thumbnail">
+  <div class="result-body" id="resultBody"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id)
+
+// Load saved key
+window.onload = () => {
+  const saved = localStorage.getItem('gemini_key')
+  if (saved) {
+    $('apiKey').value = saved
+    $('keyStatus').textContent = '✓ 保存済み'
+  }
+}
+
+function saveKey() {
+  const key = $('apiKey').value.trim()
+  if (!key) return
+  localStorage.setItem('gemini_key', key)
+  $('keyStatus').textContent = '✓ 保存しました'
+  setTimeout(() => $('keyStatus').textContent = '✓ 保存済み', 1500)
+}
+
+async function pasteUrl() {
+  try {
+    const text = await navigator.clipboard.readText()
+    if (text.includes('youtube.com') || text.includes('youtu.be')) {
+      $('ytUrl').value = text
+    }
+  } catch {
+    $('ytUrl').focus()
+  }
+}
+
+function extractVideoId(url) {
+  const patterns = [
+    /[?&]v=([^&#]+)/,
+    /youtu\.be\/([^?&#]+)/,
+    /youtube\.com\/shorts\/([^?&#]+)/,
+    /youtube\.com\/embed\/([^?&#]+)/,
+  ]
+  for (const p of patterns) {
+    const m = url.match(p)
+    if (m) return m[1]
+  }
+  return null
+}
+
+function showError(msg) {
+  $('errorMsg').textContent = msg
+  $('errorMsg').classList.add('visible')
+}
+
+function clearError() {
+  $('errorMsg').classList.remove('visible')
+}
+
+async function summarize() {
+  clearError()
+  $('resultCard').classList.remove('visible')
+  $('loader').classList.remove('visible')
+
+  const apiKey = localStorage.getItem('gemini_key') || $('apiKey').value.trim()
+  const url = $('ytUrl').value.trim()
+
+  if (!apiKey) { showError('Gemini API Keyを入力してください'); return }
+  if (!url) { showError('YouTube URLを入力してください'); return }
+
+  const videoId = extractVideoId(url)
+  if (!videoId) { showError('有効なYouTube URLを入力してください'); return }
+
+  const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`
+
+  $('runBtn').disabled = true
+  $('loader').classList.add('visible')
+
+  // Show thumbnail
+  $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+  $('thumb').classList.add('visible')
+
+  const prompt = `以下のYouTube動画を日本語で要約してください。
+
+${cleanUrl}
+
+次の形式で出力してください：
+
+【概要】
+（動画のテーマや目的を2〜3文で）
+
+【主なポイント】
+• （重要な内容を箇条書きで5〜8点）
+
+【結論・まとめ】
+（最終的なメッセージや学び）`
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                fileData: {
+                  mimeType: 'video/mp4',
+                  fileUri: cleanUrl
+                }
+              },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 1024
+          }
+        })
+      }
+    )
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      const msg = data?.error?.message || `APIエラー (${res.status})`
+      throw new Error(msg)
+    }
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!text) throw new Error('結果が取得できませんでした')
+
+    $('resultBody').textContent = text
+    $('resultCard').classList.add('visible')
+
+  } catch (e) {
+    showError(e.message)
+    $('thumb').classList.remove('visible')
+  } finally {
+    $('runBtn').disabled = false
+    $('loader').classList.remove('visible')
+  }
+}
+
+function copyResult() {
+  const text = $('resultBody').textContent
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.btn-copy')
+    btn.textContent = '✓ コピー済'
+    setTimeout(() => btn.textContent = 'コピー', 1500)
+  })
+}
+</script>
+</body>
+</html>
