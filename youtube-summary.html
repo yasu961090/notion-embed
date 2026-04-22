@@ -121,6 +121,58 @@
     color: #c9d1d9;
     white-space: pre-wrap;
   }
+  .btn-notion {
+    width: 100%;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-notion:active { opacity: 0.7; }
+  .code-block {
+    display: none;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+    position: relative;
+  }
+  .code-block.visible { display: block; }
+  .code-label {
+    font-size: 10px;
+    color: #484f58;
+    margin-bottom: 8px;
+    font-family: monospace;
+  }
+  .code-text {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .btn-code-copy {
+    display: block;
+    width: 100%;
+    background: #1f6feb;
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-code-copy:active { opacity: 0.8; }
   .loader {
     display: none;
     text-align: center;
@@ -187,6 +239,13 @@
   </div>
   <img class="thumb" id="thumb" alt="thumbnail">
   <div class="result-body" id="resultBody"></div>
+  <button class="btn-notion" onclick="showCodeBlock()">Notion用コードブロックを表示</button>
+  <div class="code-block" id="codeBlock">
+    <div class="code-label">``` （長押しでコピー、またはボタンでコピー）</div>
+    <div class="code-text" id="codeText"></div>
+    <div class="code-label">```</div>
+    <button class="btn-code-copy" onclick="copyCodeBlock()">コードブロックをコピー</button>
+  </div>
 </div>
 
 <script>
@@ -229,6 +288,7 @@ function clearError() {
 async function summarize() {
   clearError()
   $('resultCard').classList.remove('visible')
+  $('codeBlock').classList.remove('visible')
   $('loader').classList.remove('visible')
 
   const url = $('ytUrl').value.trim()
@@ -284,6 +344,22 @@ async function summarize() {
     $('runBtn').disabled = false
     $('loader').classList.remove('visible')
   }
+}
+
+function showCodeBlock() {
+  const text = $('resultBody').textContent.trim()
+  $('codeText').textContent = text
+  $('codeBlock').classList.add('visible')
+  $('codeBlock').scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function copyCodeBlock() {
+  const text = '```\n' + $('codeText').textContent.trim() + '\n```'
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.btn-code-copy')
+    btn.textContent = '✓ コピー済'
+    setTimeout(() => btn.textContent = 'コードブロックをコピー', 1500)
+  })
 }
 
 function copyResult() {
