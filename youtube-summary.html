@@ -358,6 +358,25 @@ ${titleLine}
   }
 }
 
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+  }
+  return fallbackCopy(text)
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  try { document.execCommand('copy') } catch {}
+  document.body.removeChild(ta)
+  return Promise.resolve()
+}
+
 function showCodeBlock() {
   const text = $('resultBody').textContent.trim()
   $('codeText').textContent = text
@@ -367,7 +386,7 @@ function showCodeBlock() {
 
 function copyCodeBlock() {
   const text = '```\n' + $('codeText').textContent.trim() + '\n```'
-  navigator.clipboard.writeText(text).then(() => {
+  copyToClipboard(text).then(() => {
     const btn = document.querySelector('.btn-code-copy')
     btn.textContent = '✓ コピー済'
     setTimeout(() => btn.textContent = 'コードブロックをコピー', 1500)
@@ -376,7 +395,7 @@ function copyCodeBlock() {
 
 function copyResult() {
   const text = $('resultBody').textContent
-  navigator.clipboard.writeText(text).then(() => {
+  copyToClipboard(text).then(() => {
     const btn = document.querySelector('.btn-copy')
     btn.textContent = '✓ コピー済'
     setTimeout(() => btn.textContent = 'コピー', 1500)
