@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>YouTube 要約</title>
+<title>YouTube 要約 (Groq)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -191,17 +191,15 @@
 <body>
 <h1>YouTube 要約ツール</h1>
 
-<!-- API Key -->
 <div class="card">
-  <label>Gemini API Key（無料）</label>
+  <label>Groq API Key（無料）</label>
   <div class="key-row">
-    <input type="password" id="apiKey" placeholder="AIza...">
+    <input type="password" id="apiKey" placeholder="gsk_...">
     <button class="btn-save" onclick="saveKey()">保存</button>
   </div>
   <div class="key-status" id="keyStatus"></div>
 </div>
 
-<!-- URL Input -->
 <div class="card">
   <label>YouTube URL</label>
   <div class="url-row">
@@ -232,7 +230,7 @@
 const $ = id => document.getElementById(id)
 
 window.onload = () => {
-  const saved = localStorage.getItem('gemini_key')
+  const saved = localStorage.getItem('groq_key')
   if (saved) {
     $('apiKey').value = saved
     $('keyStatus').textContent = '✓ 保存済み'
@@ -242,7 +240,7 @@ window.onload = () => {
 function saveKey() {
   const key = $('apiKey').value.trim()
   if (!key) return
-  localStorage.setItem('gemini_key', key)
+  localStorage.setItem('groq_key', key)
   $('keyStatus').textContent = '✓ 保存しました'
   setTimeout(() => $('keyStatus').textContent = '✓ 保存済み', 1500)
 }
@@ -286,10 +284,10 @@ async function summarize() {
   $('resultCard').classList.remove('visible')
   $('loader').classList.remove('visible')
 
-  const apiKey = localStorage.getItem('gemini_key') || $('apiKey').value.trim()
+  const apiKey = localStorage.getItem('groq_key') || $('apiKey').value.trim()
   const url = $('ytUrl').value.trim()
 
-  if (!apiKey) { showError('Gemini API Keyを入力してください'); return }
+  if (!apiKey) { showError('Groq API Keyを入力してください'); return }
   if (!url) { showError('YouTube URLを入力してください'); return }
 
   const videoId = extractVideoId(url)
@@ -315,50 +313,25 @@ async function summarize() {
   const titleLine = videoTitle ? `タイトル: ${videoTitle}\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
   const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${titleLine}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
 
-  let model = ''
   try {
-    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`)
-    if (listRes.ok) {
-      const listData = await listRes.json()
-      const preferred = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-pro']
-      const available = (listData.models || [])
-        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-        .map(m => m.name.replace('models/', ''))
-      for (const p of preferred) {
-        if (available.find(a => a.startsWith(p))) {
-          model = available.find(a => a.startsWith(p))
-          break
-        }
-      }
-      if (!model && available.length > 0) model = available[0]
-    }
-  } catch {}
-
-  if (!model) {
-    showError('利用可能なモデルが見つかりません。APIキーを確認してください。')
-    $('thumb').classList.remove('visible')
-    $('runBtn').disabled = false
-    $('loader').classList.remove('visible')
-    return
-  }
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-        })
-      }
-    )
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.4,
+        max_tokens: 1024
+      })
+    })
 
     const data = await res.json()
     if (!res.ok) throw new Error(data?.error?.message || `APIエラー (${res.status})`)
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+    const text = data?.choices?.[0]?.message?.content
     if (!text) throw new Error('結果が取得できませんでした')
 
     $('resultBody').textContent = text
