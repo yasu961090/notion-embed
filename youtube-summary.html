@@ -305,9 +305,20 @@ async function summarize() {
   $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
   $('thumb').classList.add('visible')
 
+  // Get video title via oEmbed
+  let videoTitle = ''
+  try {
+    const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`)
+    if (oembed.ok) {
+      const info = await oembed.json()
+      videoTitle = info.title || ''
+    }
+  } catch {}
+
+  const titleLine = videoTitle ? `タイトル: ${videoTitle}\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
   const prompt = `以下のYouTube動画を日本語で要約してください。
 
-${cleanUrl}
+${titleLine}
 
 次の形式で出力してください：
 
@@ -320,52 +331,47 @@ ${cleanUrl}
 【結論・まとめ】
 （最終的なメッセージや学び）`
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                fileData: {
-                  mimeType: 'video/mp4',
-                  fileUri: cleanUrl
-                }
-              },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1024
-          }
-        })
+  const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-pro']
+
+  let lastError = ''
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+          })
+        }
+      )
+
+      const data = await res.json()
+      if (!res.ok) {
+        lastError = data?.error?.message || `APIエラー (${res.status})`
+        continue
       }
-    )
 
-    const data = await res.json()
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      if (!text) { lastError = '結果が取得できませんでした'; continue }
 
-    if (!res.ok) {
-      const msg = data?.error?.message || `APIエラー (${res.status})`
-      throw new Error(msg)
+      $('resultBody').textContent = text
+      $('resultCard').classList.add('visible')
+      $('runBtn').disabled = false
+      $('loader').classList.remove('visible')
+      return
+
+    } catch (e) {
+      lastError = e.message
     }
-
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) throw new Error('結果が取得できませんでした')
-
-    $('resultBody').textContent = text
-    $('resultCard').classList.add('visible')
-
-  } catch (e) {
-    showError(e.message)
-    $('thumb').classList.remove('visible')
-  } finally {
-    $('runBtn').disabled = false
-    $('loader').classList.remove('visible')
   }
+
+  showError(lastError)
+  $('thumb').classList.remove('visible')
+  $('runBtn').disabled = false
+  $('loader').classList.remove('visible')
 }
 
 function copyResult() {
