@@ -233,7 +233,7 @@ const $ = id => document.getElementById(id)
 
 // Load saved key
 window.onload = () => {
-  const saved = localStorage.getItem('gemini_key')
+  const saved = localStorage.getItem('groq_key')
   if (saved) {
     $('apiKey').value = saved
     $('keyStatus').textContent = '✓ 保存済み'
@@ -243,7 +243,7 @@ window.onload = () => {
 function saveKey() {
   const key = $('apiKey').value.trim()
   if (!key) return
-  localStorage.setItem('gemini_key', key)
+  localStorage.setItem('groq_key', key)
   $('keyStatus').textContent = '✓ 保存しました'
   setTimeout(() => $('keyStatus').textContent = '✓ 保存済み', 1500)
 }
@@ -287,10 +287,10 @@ async function summarize() {
   $('resultCard').classList.remove('visible')
   $('loader').classList.remove('visible')
 
-  const apiKey = localStorage.getItem('gemini_key') || $('apiKey').value.trim()
+  const apiKey = localStorage.getItem('groq_key') || $('apiKey').value.trim()
   const url = $('ytUrl').value.trim()
 
-  if (!apiKey) { showError('Gemini API Keyを入力してください'); return }
+  if (!apiKey) { showError('Groq API Keyを入力してください'); return }
   if (!url) { showError('YouTube URLを入力してください'); return }
 
   const videoId = extractVideoId(url)
@@ -331,7 +331,6 @@ ${titleLine}
 【結論・まとめ】
 （最終的なメッセージや学び）`
 
-  // 利用可能なモデルを動的に取得
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
