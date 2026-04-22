@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>YouTube 要約 (Groq)</title>
+<title>YouTube 要約</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -17,8 +17,14 @@
     font-size: 16px;
     color: #8b949e;
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 6px;
     letter-spacing: 0.05em;
+  }
+  .sub {
+    text-align: center;
+    font-size: 11px;
+    color: #484f58;
+    margin-bottom: 24px;
   }
   .card {
     background: #161b22;
@@ -35,7 +41,7 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
-  input, textarea {
+  input {
     width: 100%;
     background: #0d1117;
     border: 1px solid #30363d;
@@ -46,40 +52,8 @@
     outline: none;
     -webkit-appearance: none;
   }
-  input:focus, textarea:focus {
-    border-color: #58a6ff;
-  }
-  input[type="password"] {
-    letter-spacing: 0.1em;
-  }
-  .key-row {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-  }
-  .key-row input { flex: 1; }
-  .btn-save {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn-save:active { opacity: 0.7; }
-  .key-status {
-    font-size: 11px;
-    margin-top: 6px;
-    color: #3fb950;
-    min-height: 16px;
-  }
-  .url-row {
-    display: flex;
-    gap: 8px;
-  }
+  input:focus { border-color: #58a6ff; }
+  .url-row { display: flex; gap: 8px; }
   .url-row input { flex: 1; }
   .btn-paste {
     background: #21262d;
@@ -107,10 +81,7 @@
     -webkit-tap-highlight-color: transparent;
     transition: opacity 0.15s;
   }
-  .btn-run:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
+  .btn-run:disabled { opacity: 0.4; cursor: default; }
   .btn-run:active:not(:disabled) { opacity: 0.8; }
   .result-card {
     display: none;
@@ -190,15 +161,7 @@
 </head>
 <body>
 <h1>YouTube 要約ツール</h1>
-
-<div class="card">
-  <label>Groq API Key（無料）</label>
-  <div class="key-row">
-    <input type="password" id="apiKey" placeholder="gsk_...">
-    <button class="btn-save" onclick="saveKey()">保存</button>
-  </div>
-  <div class="key-status" id="keyStatus"></div>
-</div>
+<p class="sub">登録不要・完全無料</p>
 
 <div class="card">
   <label>YouTube URL</label>
@@ -214,7 +177,7 @@
 
 <div class="loader" id="loader">
   <div class="spinner"></div>
-  動画を解析中…
+  解析中…（少々お待ちください）
 </div>
 
 <div class="result-card" id="resultCard">
@@ -228,22 +191,6 @@
 
 <script>
 const $ = id => document.getElementById(id)
-
-window.onload = () => {
-  const saved = localStorage.getItem('groq_key')
-  if (saved) {
-    $('apiKey').value = saved
-    $('keyStatus').textContent = '✓ 保存済み'
-  }
-}
-
-function saveKey() {
-  const key = $('apiKey').value.trim()
-  if (!key) return
-  localStorage.setItem('groq_key', key)
-  $('keyStatus').textContent = '✓ 保存しました'
-  setTimeout(() => $('keyStatus').textContent = '✓ 保存済み', 1500)
-}
 
 async function pasteUrl() {
   try {
@@ -284,10 +231,7 @@ async function summarize() {
   $('resultCard').classList.remove('visible')
   $('loader').classList.remove('visible')
 
-  const apiKey = localStorage.getItem('groq_key') || $('apiKey').value.trim()
   const url = $('ytUrl').value.trim()
-
-  if (!apiKey) { showError('Groq API Keyを入力してください'); return }
   if (!url) { showError('YouTube URLを入力してください'); return }
 
   const videoId = extractVideoId(url)
@@ -314,24 +258,20 @@ async function summarize() {
   const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${titleLine}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.4,
-        max_tokens: 1024
+        model: 'openai',
+        seed: 42,
+        private: true
       })
     })
 
-    const data = await res.json()
-    if (!res.ok) throw new Error(data?.error?.message || `APIエラー (${res.status})`)
+    if (!res.ok) throw new Error(`エラー (${res.status})`)
 
-    const text = data?.choices?.[0]?.message?.content
+    const text = await res.text()
     if (!text) throw new Error('結果が取得できませんでした')
 
     $('resultBody').textContent = text
