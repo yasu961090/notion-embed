@@ -303,54 +303,59 @@ async function summarize() {
   $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
   $('thumb').classList.add('visible')
 
-  const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${cleanUrl}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
-
+  let videoTitle = ''
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                fileData: {
-                  mimeType: 'video/mp4',
-                  fileUri: cleanUrl
-                }
-              },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1024
-          }
-        })
-      }
-    )
-
-    const data = await res.json()
-
-    if (!res.ok) {
-      const msg = data?.error?.message || `APIエラー (${res.status})`
-      throw new Error(msg)
+    const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`)
+    if (oembed.ok) {
+      const info = await oembed.json()
+      videoTitle = info.title || ''
     }
+  } catch {}
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) throw new Error('結果が取得できませんでした')
+  const titleLine = videoTitle ? `タイトル: ${videoTitle}\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
+  const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${titleLine}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
 
-    $('resultBody').textContent = text
-    $('resultCard').classList.add('visible')
+  const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-pro']
 
-  } catch (e) {
-    showError(e.message)
-    $('thumb').classList.remove('visible')
-  } finally {
-    $('runBtn').disabled = false
-    $('loader').classList.remove('visible')
+  let lastError = ''
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+          })
+        }
+      )
+
+      const data = await res.json()
+      if (!res.ok) {
+        lastError = data?.error?.message || `APIエラー (${res.status})`
+        continue
+      }
+
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      if (!text) { lastError = '結果が取得できませんでした'; continue }
+
+      $('resultBody').textContent = text
+      $('resultCard').classList.add('visible')
+      $('runBtn').disabled = false
+      $('loader').classList.remove('visible')
+      return
+
+    } catch (e) {
+      lastError = e.message
+    }
   }
+
+  showError(lastError)
+  $('thumb').classList.remove('visible')
+  $('runBtn').disabled = false
+  $('loader').classList.remove('visible')
 }
 
 function copyResult() {
