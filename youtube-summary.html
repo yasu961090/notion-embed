@@ -315,47 +315,62 @@ async function summarize() {
   const titleLine = videoTitle ? `タイトル: ${videoTitle}\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
   const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${titleLine}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
 
-  const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-pro']
-
-  let lastError = ''
-  for (const model of models) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-          })
+  let model = ''
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`)
+    if (listRes.ok) {
+      const listData = await listRes.json()
+      const preferred = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-pro']
+      const available = (listData.models || [])
+        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => m.name.replace('models/', ''))
+      for (const p of preferred) {
+        if (available.find(a => a.startsWith(p))) {
+          model = available.find(a => a.startsWith(p))
+          break
         }
-      )
-
-      const data = await res.json()
-      if (!res.ok) {
-        lastError = data?.error?.message || `APIエラー (${res.status})`
-        continue
       }
-
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-      if (!text) { lastError = '結果が取得できませんでした'; continue }
-
-      $('resultBody').textContent = text
-      $('resultCard').classList.add('visible')
-      $('runBtn').disabled = false
-      $('loader').classList.remove('visible')
-      return
-
-    } catch (e) {
-      lastError = e.message
+      if (!model && available.length > 0) model = available[0]
     }
+  } catch {}
+
+  if (!model) {
+    showError('利用可能なモデルが見つかりません。APIキーを確認してください。')
+    $('thumb').classList.remove('visible')
+    $('runBtn').disabled = false
+    $('loader').classList.remove('visible')
+    return
   }
 
-  showError(lastError)
-  $('thumb').classList.remove('visible')
-  $('runBtn').disabled = false
-  $('loader').classList.remove('visible')
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+        })
+      }
+    )
+
+    const data = await res.json()
+    if (!res.ok) throw new Error(data?.error?.message || `APIエラー (${res.status})`)
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!text) throw new Error('結果が取得できませんでした')
+
+    $('resultBody').textContent = text
+    $('resultCard').classList.add('visible')
+
+  } catch (e) {
+    showError(e.message)
+    $('thumb').classList.remove('visible')
+  } finally {
+    $('runBtn').disabled = false
+    $('loader').classList.remove('visible')
+  }
 }
 
 function copyResult() {
