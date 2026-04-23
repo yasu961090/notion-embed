@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>YouTube 要約</title>
+<title>URL 要約ツール</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -13,199 +13,65 @@
     padding: 20px 16px 48px;
     min-height: 100vh;
   }
-  h1 {
-    font-size: 16px;
-    color: #8b949e;
-    text-align: center;
-    margin-bottom: 4px;
-    letter-spacing: 0.05em;
-  }
-  .sub {
-    text-align: center;
-    font-size: 11px;
-    color: #484f58;
-    margin-bottom: 24px;
-  }
-  .card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-  }
-  label {
-    font-size: 11px;
-    color: #8b949e;
-    display: block;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  input {
-    width: 100%;
-    background: #0d1117;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    color: #e6edf3;
-    font-size: 14px;
-    padding: 10px 12px;
-    outline: none;
-    -webkit-appearance: none;
-  }
+  h1 { font-size: 16px; color: #8b949e; text-align: center; margin-bottom: 4px; letter-spacing: 0.05em; }
+  .sub { text-align: center; font-size: 11px; color: #484f58; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  label { font-size: 11px; color: #8b949e; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+  input { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #e6edf3; font-size: 14px; padding: 10px 12px; outline: none; -webkit-appearance: none; }
   input:focus { border-color: #58a6ff; }
   .url-row { display: flex; gap: 8px; }
   .url-row input { flex: 1; }
-  .btn-paste {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    -webkit-tap-highlight-color: transparent;
-  }
+  .btn-paste { background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 8px; padding: 10px 12px; font-size: 13px; cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
   .btn-paste:active { opacity: 0.7; }
-  .btn-run {
-    width: 100%;
-    background: #1f6feb;
-    border: none;
-    color: #fff;
-    border-radius: 10px;
-    padding: 14px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 4px;
-    -webkit-tap-highlight-color: transparent;
-    transition: opacity 0.15s;
-  }
+  .type-row { display: flex; gap: 6px; margin-top: 10px; }
+  .type-btn { flex: 1; padding: 7px 4px; border-radius: 6px; font-size: 11px; cursor: pointer; border: 1px solid #30363d; background: #21262d; color: #484f58; text-align: center; -webkit-tap-highlight-color: transparent; }
+  .type-btn.active { border-color: #58a6ff; color: #58a6ff; background: #0d1117; }
+  .btn-run { width: 100%; background: #1f6feb; border: none; color: #fff; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px; -webkit-tap-highlight-color: transparent; transition: opacity 0.15s; }
   .btn-run:disabled { opacity: 0.4; cursor: default; }
   .btn-run:active:not(:disabled) { opacity: 0.8; }
-  .loader {
-    display: none;
-    text-align: center;
-    padding: 24px 0;
-    color: #8b949e;
-    font-size: 13px;
-  }
+  .loader { display: none; text-align: center; padding: 24px 0; color: #8b949e; font-size: 13px; }
   .loader.visible { display: block; }
-  .spinner {
-    width: 24px; height: 24px;
-    border: 2px solid #30363d;
-    border-top-color: #58a6ff;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 10px;
-  }
+  .loader-sub { font-size: 11px; color: #484f58; margin-top: 4px; }
+  .spinner { width: 24px; height: 24px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .error {
-    display: none;
-    color: #f85149;
-    font-size: 13px;
-    padding: 10px 12px;
-    background: #2d1216;
-    border: 1px solid #f8514933;
-    border-radius: 8px;
-    margin-top: 8px;
-  }
+  .error { display: none; color: #f85149; font-size: 13px; padding: 10px 12px; background: #2d1216; border: 1px solid #f8514933; border-radius: 8px; margin-top: 8px; }
   .error.visible { display: block; }
-  .result-card {
-    display: none;
-    margin-top: 12px;
-  }
+  .result-card { display: none; margin-top: 12px; }
   .result-card.visible { display: block; }
-  .thumb {
-    width: 100%;
-    border-radius: 10px;
-    margin-bottom: 12px;
-    display: none;
-  }
+  .thumb { width: 100%; border-radius: 10px; margin-bottom: 12px; display: none; }
   .thumb.visible { display: block; }
-
-  /* Markdown レンダリング */
-  .md-body {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 18px 16px;
-    font-size: 14px;
-    line-height: 1.8;
-    color: #c9d1d9;
-  }
-  .md-body h2 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #e6edf3;
-    margin: 18px 0 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #30363d;
-  }
+  .source-badge { font-size: 11px; color: #8b949e; background: #21262d; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; display: inline-block; margin-bottom: 10px; }
+  .md-body { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 18px 16px; font-size: 14px; line-height: 1.8; color: #c9d1d9; }
+  .md-body h2 { font-size: 15px; font-weight: 700; color: #e6edf3; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #30363d; }
   .md-body h2:first-child { margin-top: 0; }
-  .md-body h3 {
-    font-size: 13px;
-    font-weight: 600;
-    color: #58a6ff;
-    margin: 12px 0 6px;
-  }
+  .md-body h3 { font-size: 13px; font-weight: 600; color: #58a6ff; margin: 12px 0 6px; }
   .md-body p { margin: 6px 0; }
-  .md-body ul {
-    padding-left: 18px;
-    margin: 6px 0;
-  }
+  .md-body ul { padding-left: 18px; margin: 6px 0; }
   .md-body li { margin: 4px 0; }
   .md-body strong { color: #e6edf3; }
-  .md-body hr {
-    border: none;
-    border-top: 1px solid #30363d;
-    margin: 14px 0;
-  }
-  .md-body blockquote {
-    border-left: 3px solid #58a6ff;
-    padding-left: 12px;
-    color: #8b949e;
-    margin: 8px 0;
-  }
-
-  /* ボタン群 */
-  .action-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-  }
-  .btn-action {
-    flex: 1;
-    padding: 11px 8px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    -webkit-tap-highlight-color: transparent;
-    transition: opacity 0.15s;
-  }
-  .btn-action:active { opacity: 0.75; }
-  .btn-md {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #8b949e;
-  }
-  .btn-notion-copy {
-    background: #1f6feb;
-    color: #fff;
-  }
+  .md-body hr { border: none; border-top: 1px solid #30363d; margin: 14px 0; }
+  .md-body blockquote { border-left: 3px solid #58a6ff; padding-left: 12px; color: #8b949e; margin: 8px 0; }
+  .action-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-copy-md { flex: 1; padding: 12px 8px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+  .btn-copy-md:active { opacity: 0.7; }
+  .btn-copy-notion { flex: 1; padding: 12px 8px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; background: #1f6feb; border: none; color: #fff; }
+  .btn-copy-notion:active { opacity: 0.8; }
 </style>
 </head>
 <body>
-<h1>YouTube 要約ツール</h1>
-<p class="sub">登録不要・完全無料</p>
+<h1>URL 要約ツール</h1>
+<p class="sub">YouTube・ニュース・ブログ・記事 対応</p>
 
 <div class="card">
-  <label>YouTube URL</label>
+  <label>URL を貼り付け</label>
   <div class="url-row">
-    <input type="url" id="ytUrl" placeholder="https://www.youtube.com/watch?v=...">
+    <input type="url" id="urlInput" placeholder="https://...">
     <button class="btn-paste" onclick="pasteUrl()">貼付</button>
+  </div>
+  <div class="type-row">
+    <div class="type-btn active" id="t-auto" onclick="setType('auto')">🔍 自動判定</div>
+    <div class="type-btn" id="t-yt" onclick="setType('youtube')">▶ YouTube</div>
+    <div class="type-btn" id="t-web" onclick="setType('web')">🌐 Webページ</div>
   </div>
 </div>
 
@@ -215,21 +81,30 @@
 
 <div class="loader" id="loader">
   <div class="spinner"></div>
-  解析中…（少々お待ちください）
+  <div id="loaderMsg">解析中…</div>
+  <div class="loader-sub" id="loaderSub"></div>
 </div>
 
 <div class="result-card" id="resultCard">
   <img class="thumb" id="thumb" alt="thumbnail">
+  <div class="source-badge" id="sourceBadge"></div>
   <div class="md-body" id="mdBody"></div>
   <div class="action-row">
-    <button class="btn-action btn-md" onclick="copyMarkdown()">Markdownをコピー</button>
-    <button class="btn-action btn-notion-copy" onclick="copyNotion()">Notionにコピー</button>
+    <button class="btn-copy-md" id="btnMd" onclick="copyMarkdown()">Markdownをコピー</button>
+    <button class="btn-copy-notion" id="btnNotion" onclick="copyNotion()">Notionにコピー</button>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id)
 let rawMarkdown = ''
+let urlType = 'auto'
+
+function setType(t) {
+  urlType = t
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'))
+  $('t-' + t).classList.add('active')
+}
 
 function parseMarkdown(md) {
   return md
@@ -237,78 +112,93 @@ function parseMarkdown(md) {
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^---$/gm, '<hr>')
-    .replace(/^\> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
     .replace(/^- \*\*(.+?)\*\*: (.+)$/gm, '<li><strong>$1</strong>: $2</li>')
     .replace(/^- (.+)$/gm, '<li>$1</li>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
-    .replace(/([^>\n].+)\n/g, '<p>$1</p>')
+    .replace(/(<li>[\s\S]*?<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
+    .replace(/^(?!<[a-z]).+$/gm, m => m.trim() ? '<p>' + m + '</p>' : '')
     .replace(/\n/g, '')
 }
 
 async function pasteUrl() {
   try {
     const text = await navigator.clipboard.readText()
-    if (text.includes('youtube.com') || text.includes('youtu.be')) {
-      $('ytUrl').value = text
-    }
-  } catch { $('ytUrl').focus() }
+    $('urlInput').value = text
+  } catch { $('urlInput').focus() }
 }
 
 function extractVideoId(url) {
-  const patterns = [
-    /[?&]v=([^&#]+)/,
-    /youtu\.be\/([^?&#]+)/,
-    /youtube\.com\/shorts\/([^?&#]+)/,
-    /youtube\.com\/embed\/([^?&#]+)/,
-  ]
-  for (const p of patterns) {
-    const m = url.match(p)
-    if (m) return m[1]
-  }
+  const patterns = [/[?&]v=([^&#]+)/, /youtu\.be\/([^?&#]+)/, /youtube\.com\/shorts\/([^?&#]+)/]
+  for (const p of patterns) { const m = url.match(p); if (m) return m[1] }
   return null
 }
 
-function showError(msg) {
-  $('errorMsg').textContent = msg
-  $('errorMsg').classList.add('visible')
+function isYouTube(url) {
+  return url.includes('youtube.com') || url.includes('youtu.be')
 }
 
+function showError(msg) { $('errorMsg').textContent = msg; $('errorMsg').classList.add('visible') }
 function clearError() { $('errorMsg').classList.remove('visible') }
+
+async function fetchPageText(url) {
+  // CORSプロキシ経由でページ取得
+  const proxies = [
+    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+  ]
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy)
+      if (!res.ok) continue
+      const data = await res.json()
+      const html = data.contents || data
+      if (!html) continue
+
+      // HTMLからテキスト抽出
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(html, 'text/html')
+      // 不要タグ除去
+      ;['script','style','nav','header','footer','aside','iframe','noscript'].forEach(tag => {
+        doc.querySelectorAll(tag).forEach(el => el.remove())
+      })
+      // 本文エリアを優先
+      const main = doc.querySelector('article, main, [role="main"], .post-content, .article-body, .entry-content') || doc.body
+      const title = doc.querySelector('title')?.textContent || ''
+      const text = main?.innerText || main?.textContent || ''
+      // 空白整理・最大5000文字
+      const cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 5000)
+      if (cleaned.length < 100) continue
+      return { title, text: cleaned }
+    } catch {}
+  }
+  throw new Error('ページの取得に失敗しました。アクセス制限があるサイトは対応できません。')
+}
 
 async function summarize() {
   clearError()
   $('resultCard').classList.remove('visible')
   $('loader').classList.remove('visible')
 
-  const url = $('ytUrl').value.trim()
-  if (!url) { showError('YouTube URLを入力してください'); return }
+  const url = $('urlInput').value.trim()
+  if (!url) { showError('URLを入力してください'); return }
+  if (!url.startsWith('http')) { showError('http または https で始まるURLを入力してください'); return }
 
-  const videoId = extractVideoId(url)
-  if (!videoId) { showError('有効なYouTube URLを入力してください'); return }
+  const detectedYT = isYouTube(url)
+  const useYT = urlType === 'youtube' || (urlType === 'auto' && detectedYT)
 
-  const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`
   $('runBtn').disabled = true
   $('loader').classList.add('visible')
+  $('thumb').classList.remove('visible')
 
-  $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
-  $('thumb').classList.add('visible')
+  let prompt = ''
+  let sourceLabel = ''
 
-  let videoTitle = ''
-  try {
-    const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`)
-    if (oembed.ok) videoTitle = (await oembed.json()).title || ''
-  } catch {}
-
-  const titleLine = videoTitle ? `タイトル: **${videoTitle}**\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
-  const prompt = `以下のYouTube動画を日本語で要約し、必ずMarkdown形式で出力してください。
-
-${titleLine}
-
-出力フォーマット（このまま使用）:
+  const mdFormat = (sourceUrl) => `
+次の形式でMarkdown出力してください：
 
 ## 📌 概要
-（動画のテーマと目的を2〜3文で）
+（テーマと目的を2〜3文で）
 
 ---
 
@@ -326,28 +216,62 @@ ${titleLine}
 
 ---
 
-> 🎬 動画URL: ${cleanUrl}`
+> 🔗 URL: ${sourceUrl}`
+
+  if (useYT) {
+    const videoId = extractVideoId(url)
+    if (!videoId) { showError('有効なYouTube URLを入力してください'); $('runBtn').disabled = false; $('loader').classList.remove('visible'); return }
+
+    $('loaderMsg').textContent = 'YouTube動画を解析中…'
+    $('loaderSub').textContent = ''
+
+    $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+    $('thumb').classList.add('visible')
+
+    let title = ''
+    try {
+      const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`)
+      if (oembed.ok) title = (await oembed.json()).title || ''
+    } catch {}
+
+    const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`
+    sourceLabel = '▶ YouTube'
+    prompt = `以下のYouTube動画を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${title ? `タイトル: **${title}**\n` : ''}URL: ${cleanUrl}\n${mdFormat(cleanUrl)}`
+
+  } else {
+    $('loaderMsg').textContent = 'ページを取得中…'
+    $('loaderSub').textContent = 'サイトによって数秒かかります'
+    sourceLabel = '🌐 ' + new URL(url).hostname
+
+    let pageData
+    try {
+      pageData = await fetchPageText(url)
+    } catch (e) {
+      showError(e.message)
+      $('runBtn').disabled = false
+      $('loader').classList.remove('visible')
+      return
+    }
+
+    $('loaderMsg').textContent = 'AI で要約中…'
+    $('loaderSub').textContent = ''
+    prompt = `以下のWebページの内容を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${pageData.title ? `タイトル: **${pageData.title}**\n` : ''}URL: ${url}\n\n--- ページ本文 ---\n${pageData.text}\n--- 本文ここまで ---\n${mdFormat(url)}`
+  }
+
+  $('sourceBadge').textContent = sourceLabel
 
   try {
     const res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        model: 'openai',
-        seed: 42,
-        private: true
-      })
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai', seed: 42, private: true })
     })
-
     if (!res.ok) throw new Error(`エラー (${res.status})`)
     const text = await res.text()
     if (!text) throw new Error('結果が取得できませんでした')
-
     rawMarkdown = text
     $('mdBody').innerHTML = parseMarkdown(text)
     $('resultCard').classList.add('visible')
-
   } catch (e) {
     showError(e.message)
     $('thumb').classList.remove('visible')
@@ -357,14 +281,19 @@ ${titleLine}
   }
 }
 
-function copyToClipboard(text) {
+function copyText(text, btnId) {
+  const btn = $(btnId)
+  const orig = btn.textContent
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+    navigator.clipboard.writeText(text).catch(() => execCopy(text))
+  } else {
+    execCopy(text)
   }
-  return fallbackCopy(text)
+  btn.textContent = '✓ コピー済'
+  setTimeout(() => btn.textContent = orig, 1800)
 }
 
-function fallbackCopy(text) {
+function execCopy(text) {
   const ta = document.createElement('textarea')
   ta.value = text
   ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;'
@@ -372,24 +301,10 @@ function fallbackCopy(text) {
   ta.focus(); ta.select()
   try { document.execCommand('copy') } catch {}
   document.body.removeChild(ta)
-  return Promise.resolve()
 }
 
-function copyMarkdown() {
-  copyToClipboard(rawMarkdown).then(() => {
-    const btn = document.querySelectorAll('.btn-action')[0]
-    btn.textContent = '✓ コピー済'
-    setTimeout(() => btn.textContent = 'Markdownをコピー', 1500)
-  })
-}
-
-function copyNotion() {
-  copyToClipboard(rawMarkdown).then(() => {
-    const btn = document.querySelectorAll('.btn-action')[1]
-    btn.textContent = '✓ コピー済 → Notionへ貼付'
-    setTimeout(() => btn.textContent = 'Notionにコピー', 2000)
-  })
-}
+function copyMarkdown() { copyText(rawMarkdown, 'btnMd') }
+function copyNotion() { copyText(rawMarkdown, 'btnNotion') }
 </script>
 </body>
 </html>
