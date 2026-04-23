@@ -4,20 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>YouTube 要約</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
     background: #0d1117;
     color: #e6edf3;
-    padding: 20px 16px 40px;
+    padding: 20px 16px 48px;
     min-height: 100vh;
   }
   h1 {
     font-size: 16px;
     color: #8b949e;
     text-align: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     letter-spacing: 0.05em;
   }
   .sub {
@@ -83,95 +84,6 @@
   }
   .btn-run:disabled { opacity: 0.4; cursor: default; }
   .btn-run:active:not(:disabled) { opacity: 0.8; }
-  .result-card {
-    display: none;
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 16px;
-    margin-top: 12px;
-  }
-  .result-card.visible { display: block; }
-  .result-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-  .result-label {
-    font-size: 11px;
-    color: #8b949e;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .btn-copy {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    border-radius: 6px;
-    padding: 5px 12px;
-    font-size: 12px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn-copy:active { opacity: 0.7; }
-  .result-body {
-    font-size: 14px;
-    line-height: 1.8;
-    color: #c9d1d9;
-    white-space: pre-wrap;
-  }
-  .btn-notion {
-    width: 100%;
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 13px;
-    cursor: pointer;
-    margin-top: 10px;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn-notion:active { opacity: 0.7; }
-  .code-block {
-    display: none;
-    background: #0d1117;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 12px;
-    margin-top: 10px;
-  }
-  .code-block.visible { display: block; }
-  .code-label {
-    font-size: 10px;
-    color: #484f58;
-    margin-bottom: 8px;
-    font-family: monospace;
-  }
-  .code-text {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 12px;
-    line-height: 1.7;
-    color: #c9d1d9;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-  .btn-code-copy {
-    display: block;
-    width: 100%;
-    background: #1f6feb;
-    border: none;
-    color: #fff;
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 10px;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn-code-copy:active { opacity: 0.8; }
   .loader {
     display: none;
     text-align: center;
@@ -181,8 +93,7 @@
   }
   .loader.visible { display: block; }
   .spinner {
-    width: 24px;
-    height: 24px;
+    width: 24px; height: 24px;
     border: 2px solid #30363d;
     border-top-color: #58a6ff;
     border-radius: 50%;
@@ -201,13 +112,68 @@
     margin-top: 8px;
   }
   .error.visible { display: block; }
+  .result-card {
+    display: none;
+    margin-top: 12px;
+  }
+  .result-card.visible { display: block; }
   .thumb {
     width: 100%;
-    border-radius: 8px;
+    border-radius: 10px;
     margin-bottom: 12px;
     display: none;
   }
   .thumb.visible { display: block; }
+  .md-body {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 18px 16px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #c9d1d9;
+  }
+  .md-body h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #e6edf3;
+    margin: 18px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #30363d;
+  }
+  .md-body h2:first-child { margin-top: 0; }
+  .md-body h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #58a6ff;
+    margin: 12px 0 6px;
+  }
+  .md-body p { margin: 6px 0; }
+  .md-body ul { padding-left: 18px; margin: 6px 0; }
+  .md-body li { margin: 4px 0; }
+  .md-body strong { color: #e6edf3; }
+  .md-body hr { border: none; border-top: 1px solid #30363d; margin: 14px 0; }
+  .md-body blockquote {
+    border-left: 3px solid #58a6ff;
+    padding-left: 12px;
+    color: #8b949e;
+    margin: 8px 0;
+  }
+  .action-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-action {
+    flex: 1;
+    padding: 11px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+  }
+  .btn-action:active { opacity: 0.75; }
+  .btn-md { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+  .btn-notion-copy { background: #1f6feb; color: #fff; }
 </style>
 </head>
 <body>
@@ -232,23 +198,19 @@
 </div>
 
 <div class="result-card" id="resultCard">
-  <div class="result-header">
-    <span class="result-label">要約結果</span>
-    <button class="btn-copy" onclick="copyResult()">コピー</button>
-  </div>
   <img class="thumb" id="thumb" alt="thumbnail">
-  <div class="result-body" id="resultBody"></div>
-  <button class="btn-notion" onclick="showCodeBlock()">Notion用コードブロックを表示</button>
-  <div class="code-block" id="codeBlock">
-    <div class="code-label">```</div>
-    <div class="code-text" id="codeText"></div>
-    <div class="code-label">```</div>
-    <button class="btn-code-copy" onclick="copyCodeBlock()">コードブロックをコピー</button>
+  <div class="md-body" id="mdBody"></div>
+  <div class="action-row">
+    <button class="btn-action btn-md" onclick="copyMarkdown()">Markdownをコピー</button>
+    <button class="btn-action btn-notion-copy" onclick="copyNotion()">Notionにコピー</button>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id)
+let rawMarkdown = ''
+
+marked.setOptions({ breaks: true })
 
 async function pasteUrl() {
   try {
@@ -256,9 +218,7 @@ async function pasteUrl() {
     if (text.includes('youtube.com') || text.includes('youtu.be')) {
       $('ytUrl').value = text
     }
-  } catch {
-    $('ytUrl').focus()
-  }
+  } catch { $('ytUrl').focus() }
 }
 
 function extractVideoId(url) {
@@ -280,14 +240,11 @@ function showError(msg) {
   $('errorMsg').classList.add('visible')
 }
 
-function clearError() {
-  $('errorMsg').classList.remove('visible')
-}
+function clearError() { $('errorMsg').classList.remove('visible') }
 
 async function summarize() {
   clearError()
   $('resultCard').classList.remove('visible')
-  $('codeBlock').classList.remove('visible')
   $('loader').classList.remove('visible')
 
   const url = $('ytUrl').value.trim()
@@ -297,7 +254,6 @@ async function summarize() {
   if (!videoId) { showError('有効なYouTube URLを入力してください'); return }
 
   const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`
-
   $('runBtn').disabled = true
   $('loader').classList.add('visible')
 
@@ -307,14 +263,11 @@ async function summarize() {
   let videoTitle = ''
   try {
     const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`)
-    if (oembed.ok) {
-      const info = await oembed.json()
-      videoTitle = info.title || ''
-    }
+    if (oembed.ok) videoTitle = (await oembed.json()).title || ''
   } catch {}
 
-  const titleLine = videoTitle ? `タイトル: ${videoTitle}\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
-  const prompt = `以下のYouTube動画を日本語で要約してください。\n\n${titleLine}\n\n次の形式で出力してください：\n\n【概要】\n（動画のテーマや目的を2〜3文で）\n\n【主なポイント】\n• （重要な内容を箇条書きで5〜8点）\n\n【結論・まとめ】\n（最終的なメッセージや学び）`
+  const titleLine = videoTitle ? `タイトル: **${videoTitle}**\nURL: ${cleanUrl}` : `URL: ${cleanUrl}`
+  const prompt = `以下のYouTube動画を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${titleLine}\n\n出力フォーマット（このまま使用）:\n\n## 📌 概要\n（動画のテーマと目的を2～3文で）\n\n---\n\n## ✅ 主なポイント\n- **ポイント1**: 説明\n- **ポイント2**: 説明\n- **ポイント3**: 説明\n- **ポイント4**: 説明\n- **ポイント5**: 説明\n\n---\n\n## 💡 結論・まとめ\n（最終的なメッセージや学びを2～3文で）\n\n---\n\n> 🎥 動画URL: ${cleanUrl}`
 
   try {
     const res = await fetch('https://text.pollinations.ai/', {
@@ -329,11 +282,11 @@ async function summarize() {
     })
 
     if (!res.ok) throw new Error(`エラー (${res.status})`)
-
     const text = await res.text()
     if (!text) throw new Error('結果が取得できませんでした')
 
-    $('resultBody').textContent = text
+    rawMarkdown = text
+    $('mdBody').innerHTML = marked.parse(text)
     $('resultCard').classList.add('visible')
 
   } catch (e) {
@@ -357,35 +310,25 @@ function fallbackCopy(text) {
   ta.value = text
   ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;'
   document.body.appendChild(ta)
-  ta.focus()
-  ta.select()
+  ta.focus(); ta.select()
   try { document.execCommand('copy') } catch {}
   document.body.removeChild(ta)
   return Promise.resolve()
 }
 
-function showCodeBlock() {
-  const text = $('resultBody').textContent.trim()
-  $('codeText').textContent = text
-  $('codeBlock').classList.add('visible')
-  $('codeBlock').scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-function copyCodeBlock() {
-  const text = '```\n' + $('codeText').textContent.trim() + '\n```'
-  copyToClipboard(text).then(() => {
-    const btn = document.querySelector('.btn-code-copy')
+function copyMarkdown() {
+  copyToClipboard(rawMarkdown).then(() => {
+    const btn = document.querySelectorAll('.btn-action')[0]
     btn.textContent = '✓ コピー済'
-    setTimeout(() => btn.textContent = 'コードブロックをコピー', 1500)
+    setTimeout(() => btn.textContent = 'Markdownをコピー', 1500)
   })
 }
 
-function copyResult() {
-  const text = $('resultBody').textContent
-  copyToClipboard(text).then(() => {
-    const btn = document.querySelector('.btn-copy')
-    btn.textContent = '✓ コピー済'
-    setTimeout(() => btn.textContent = 'コピー', 1500)
+function copyNotion() {
+  copyToClipboard(rawMarkdown).then(() => {
+    const btn = document.querySelectorAll('.btn-action')[1]
+    btn.textContent = '✓ コピー済 → Notionへ貼付'
+    setTimeout(() => btn.textContent = 'Notionにコピー', 2000)
   })
 }
 </script>
