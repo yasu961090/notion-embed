@@ -141,6 +141,56 @@ function isYouTube(url) {
 function showError(msg) { $('errorMsg').textContent = msg; $('errorMsg').classList.add('visible') }
 function clearError() { $('errorMsg').classList.remove('visible') }
 
+async function fetchYouTubeContent(videoId) {
+  try {
+    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(ytUrl)}`)
+    if (!res.ok) return {}
+    const data = await res.json()
+    const html = data.contents
+    if (!html) return {}
+
+    // Extract description from JSON embedded in page
+    let description = ''
+    const dm = html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)
+    if (dm) {
+      description = dm[1]
+        .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+        .slice(0, 2000)
+    }
+
+    // Extract caption (subtitle) URL
+    let transcript = ''
+    const captionMatch = html.match(/"baseUrl":"([^"]*timedtext[^"]*)"/)
+    if (captionMatch) {
+      const captionUrl = captionMatch[1]
+        .replace(/\\u0026/g, '&')
+        .replace(/\\\/g, '/')
+      try {
+        const cr = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(captionUrl)}`)
+        if (cr.ok) {
+          const cd = await cr.json()
+          const xml = cd.contents
+          if (xml && xml.includes('<text')) {
+            const doc = new DOMParser().parseFromString(xml, 'text/xml')
+            transcript = Array.from(doc.querySelectorAll('text'))
+              .map(t => t.textContent
+                .replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'))
+              .join(' ')
+              .replace(/\s+/g, ' ').trim()
+              .slice(0, 4000)
+          }
+        }
+      } catch {}
+    }
+
+    return { description, transcript }
+  } catch {
+    return {}
+  }
+}
+
 async function fetchPageText(url) {
   const proxies = [
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
@@ -218,20 +268,35 @@ async function summarize() {
     if (!videoId) { showError('有効なYouTube URLを入力してください'); $('runBtn').disabled = false; $('loader').classList.remove('visible'); return }
 
     $('loaderMsg').textContent = 'YouTube動画を解析中…'
-    $('loaderSub').textContent = ''
+    $('loaderSub').textContent = '字幕・説明欄を取得中'
 
     $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
     $('thumb').classList.add('visible')
 
+    // Get title via oEmbed
     let title = ''
     try {
       const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`)
       if (oembed.ok) title = (await oembed.json()).title || ''
     } catch {}
 
+    // Fetch transcript and description from YouTube page
+    const ytContent = await fetchYouTubeContent(videoId)
+
     const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`
     sourceLabel = '▶ YouTube'
-    prompt = `以下のYouTube動画を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${title ? `タイトル: **${title}**\n` : ''}URL: ${cleanUrl}\n${mdFormat(cleanUrl)}`
+
+    $('loaderMsg').textContent = 'AIで要約中…'
+    $('loaderSub').textContent = ''
+
+    const contentText = ytContent.transcript || ytContent.description || ''
+    const contentLabel = ytContent.transcript ? '字幕テキスト' : ytContent.description ? '動画説明欄' : ''
+
+    if (contentText) {
+      prompt = `以下のYouTube動画の${contentLabel}を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${title ? `タイトル: **${title}**\n` : ''}URL: ${cleanUrl}\n\n--- ${contentLabel} ---\n${contentText}\n--- ここまで ---\n${mdFormat(cleanUrl)}`
+    } else {
+      prompt = `以下のYouTube動画のタイトルをもとに、動画の内容を日本語で推測・要約し、必ずMarkdown形式で出力してください。\n\n${title ? `タイトル: **${title}**\n` : ''}URL: ${cleanUrl}\n${mdFormat(cleanUrl)}`
+    }
 
   } else {
     $('loaderMsg').textContent = 'ページを取得中…'
