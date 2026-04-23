@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>YouTube 要約</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -232,7 +231,20 @@
 const $ = id => document.getElementById(id)
 let rawMarkdown = ''
 
-marked.setOptions({ breaks: true })
+function parseMarkdown(md) {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^\> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^- \*\*(.+?)\*\*: (.+)$/gm, '<li><strong>$1</strong>: $2</li>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
+    .replace(/([^>\n].+)\n/g, '<p>$1</p>')
+    .replace(/\n/g, '')
+}
 
 async function pasteUrl() {
   try {
@@ -333,7 +345,7 @@ ${titleLine}
     if (!text) throw new Error('結果が取得できませんでした')
 
     rawMarkdown = text
-    $('mdBody').innerHTML = marked.parse(text)
+    $('mdBody').innerHTML = parseMarkdown(text)
     $('resultCard').classList.add('visible')
 
   } catch (e) {
