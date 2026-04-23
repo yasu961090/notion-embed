@@ -96,14 +96,14 @@
 </div>
 
 <script>
-const $ = id => document.getElementById(id)
-let rawMarkdown = ''
-let urlType = 'auto'
+var $ = function(id) { return document.getElementById(id); };
+var rawMarkdown = '';
+var urlType = 'auto';
 
 function setType(t) {
-  urlType = t
-  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'))
-  $('t-' + t).classList.add('active')
+  urlType = t;
+  document.querySelectorAll('.type-btn').forEach(function(b) { b.classList.remove('active'); });
+  $('t-' + t).classList.add('active');
 }
 
 function parseMarkdown(md) {
@@ -116,255 +116,304 @@ function parseMarkdown(md) {
     .replace(/^- \*\*(.+?)\*\*: (.+)$/gm, '<li><strong>$1</strong>: $2</li>')
     .replace(/^- (.+)$/gm, '<li>$1</li>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/(<li>[\s\S]*?<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
-    .replace(/^(?!<[a-z]).+$/gm, m => m.trim() ? '<p>' + m + '</p>' : '')
-    .replace(/\n/g, '')
+    .replace(/(<li>[\s\S]*?<\/li>\n?)+/g, function(m) { return '<ul>' + m + '</ul>'; })
+    .replace(/^(?!<[a-z]).+$/gm, function(m) { return m.trim() ? '<p>' + m + '</p>' : ''; })
+    .replace(/\n/g, '');
 }
 
-async function pasteUrl() {
-  try {
-    const text = await navigator.clipboard.readText()
-    $('urlInput').value = text
-  } catch { $('urlInput').focus() }
+function pasteUrl() {
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText().then(function(text) {
+      $('urlInput').value = text;
+    }).catch(function() { $('urlInput').focus(); });
+  } else {
+    $('urlInput').focus();
+  }
 }
 
 function extractVideoId(url) {
-  const patterns = [/[?&]v=([^&#]+)/, /youtu\.be\/([^?&#]+)/, /youtube\.com\/shorts\/([^?&#]+)/]
-  for (const p of patterns) { const m = url.match(p); if (m) return m[1] }
-  return null
+  var patterns = [/[?&]v=([^&#]+)/, /youtu\.be\/([^?&#]+)/, /youtube\.com\/shorts\/([^?&#]+)/];
+  for (var i = 0; i < patterns.length; i++) {
+    var m = url.match(patterns[i]);
+    if (m) return m[1];
+  }
+  return null;
 }
 
 function isYouTube(url) {
-  return url.includes('youtube.com') || url.includes('youtu.be')
+  return url.indexOf('youtube.com') !== -1 || url.indexOf('youtu.be') !== -1;
 }
 
-function showError(msg) { $('errorMsg').textContent = msg; $('errorMsg').classList.add('visible') }
-function clearError() { $('errorMsg').classList.remove('visible') }
+function showError(msg) { $('errorMsg').textContent = msg; $('errorMsg').classList.add('visible'); }
+function clearError() { $('errorMsg').classList.remove('visible'); }
+
+function extractJsonString(html, key) {
+  var marker = '"' + key + '":"';
+  var start = html.indexOf(marker);
+  if (start === -1) return '';
+  var i = start + marker.length;
+  var result = '';
+  while (i < html.length) {
+    var c = html[i];
+    if (c === '\\') {
+      var next = html[i + 1];
+      if (next === 'n') { result += '\n'; i += 2; }
+      else if (next === 't') { result += '\t'; i += 2; }
+      else if (next === '"') { result += '"'; i += 2; }
+      else if (next === '\\') { result += '\\'; i += 2; }
+      else if (next === 'u') {
+        var code = parseInt(html.slice(i + 2, i + 6), 16);
+        result += String.fromCharCode(code);
+        i += 6;
+      } else { result += next; i += 2; }
+    } else if (c === '"') {
+      break;
+    } else {
+      result += c;
+      i++;
+    }
+  }
+  return result;
+}
+
+function extractCaptionUrl(html) {
+  var idx = html.indexOf('timedtext');
+  if (idx === -1) return '';
+  var before = html.lastIndexOf('"baseUrl":"', idx);
+  if (before === -1) return '';
+  var i = before + 11;
+  var url = '';
+  while (i < html.length && html[i] !== '"') {
+    if (html[i] === '\\') {
+      var next = html[i + 1];
+      if (next === 'u') {
+        var code = parseInt(html.slice(i + 2, i + 6), 16);
+        url += String.fromCharCode(code);
+        i += 6;
+      } else if (next === '/') {
+        url += '/';
+        i += 2;
+      } else {
+        url += next;
+        i += 2;
+      }
+    } else {
+      url += html[i];
+      i++;
+    }
+  }
+  return (url.indexOf('timedtext') !== -1) ? url : '';
+}
 
 async function fetchYouTubeContent(videoId) {
   try {
-    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`
-    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(ytUrl)}`)
-    if (!res.ok) return {}
-    const data = await res.json()
-    const html = data.contents
-    if (!html) return {}
+    var ytUrl = 'https://www.youtube.com/watch?v=' + videoId;
+    var res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(ytUrl));
+    if (!res.ok) return {};
+    var data = await res.json();
+    var html = data.contents;
+    if (!html) return {};
 
-    // Extract description from JSON embedded in page
-    let description = ''
-    const dm = html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)
-    if (dm) {
-      description = dm[1]
-        .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
-        .slice(0, 2000)
-    }
+    var description = extractJsonString(html, 'shortDescription').slice(0, 2000);
+    var captionUrl = extractCaptionUrl(html);
+    var transcript = '';
 
-    // Extract caption (subtitle) URL
-    let transcript = ''
-    const captionMatch = html.match(/"baseUrl":"([^"]*timedtext[^"]*)"/)
-    if (captionMatch) {
-      const captionUrl = captionMatch[1]
-        .replace(/\\u0026/g, '&')
-        .replace(/\\\/g, '/')
+    if (captionUrl) {
       try {
-        const cr = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(captionUrl)}`)
+        var cr = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(captionUrl));
         if (cr.ok) {
-          const cd = await cr.json()
-          const xml = cd.contents
-          if (xml && xml.includes('<text')) {
-            const doc = new DOMParser().parseFromString(xml, 'text/xml')
-            transcript = Array.from(doc.querySelectorAll('text'))
-              .map(t => t.textContent
-                .replace(/&#39;/g, "'").replace(/&amp;/g, '&')
-                .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'))
-              .join(' ')
-              .replace(/\s+/g, ' ').trim()
-              .slice(0, 4000)
+          var cd = await cr.json();
+          var xml = cd.contents;
+          if (xml && xml.indexOf('<text') !== -1) {
+            var doc = new DOMParser().parseFromString(xml, 'text/xml');
+            var texts = Array.from(doc.querySelectorAll('text'));
+            transcript = texts.map(function(t) { return t.textContent; })
+              .join(' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
           }
         }
-      } catch {}
+      } catch(e) {}
     }
 
-    return { description, transcript }
-  } catch {
-    return {}
+    return { description: description, transcript: transcript };
+  } catch(e) {
+    return {};
   }
 }
 
 async function fetchPageText(url) {
-  const proxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-  ]
-  for (const proxy of proxies) {
+  var proxies = [
+    'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
+  ];
+  for (var i = 0; i < proxies.length; i++) {
     try {
-      const res = await fetch(proxy)
-      if (!res.ok) continue
-      const data = await res.json()
-      const html = data.contents || data
-      if (!html) continue
+      var res = await fetch(proxies[i]);
+      if (!res.ok) continue;
+      var data = await res.json();
+      var html = data.contents || data;
+      if (!html) continue;
 
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(html, 'text/html')
-      ;['script','style','nav','header','footer','aside','iframe','noscript'].forEach(tag => {
-        doc.querySelectorAll(tag).forEach(el => el.remove())
-      })
-      const main = doc.querySelector('article, main, [role="main"], .post-content, .article-body, .entry-content') || doc.body
-      const title = doc.querySelector('title')?.textContent || ''
-      const text = main?.innerText || main?.textContent || ''
-      const cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 5000)
-      if (cleaned.length < 100) continue
-      return { title, text: cleaned }
-    } catch {}
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(html, 'text/html');
+      ['script','style','nav','header','footer','aside','iframe','noscript'].forEach(function(tag) {
+        doc.querySelectorAll(tag).forEach(function(el) { el.remove(); });
+      });
+      var main = doc.querySelector('article, main, [role="main"], .post-content, .article-body, .entry-content') || doc.body;
+      var title = doc.querySelector('title') ? doc.querySelector('title').textContent : '';
+      var text = main ? (main.innerText || main.textContent || '') : '';
+      var cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 5000);
+      if (cleaned.length < 100) continue;
+      return { title: title, text: cleaned };
+    } catch(e) {}
   }
-  throw new Error('ページの取得に失敗しました。アクセス制限があるサイトは対応できません。')
+  throw new Error('ページの取得に失敗しました。アクセス制限があるサイトは対応できません。');
+}
+
+function mdFormat(sourceUrl) {
+  return '\n次の形式でMarkdown出力してください：\n\n## 📌 概要\n（テーマと目的を2〜3文で）\n\n---\n\n## ✅ 主なポイント\n- **ポイント1**: 説明\n- **ポイント2**: 説明\n- **ポイント3**: 説明\n- **ポイント4**: 説明\n- **ポイント5**: 説明\n\n---\n\n## 💡 結論・まとめ\n（最終的なメッセージや学びを2〜3文で）\n\n---\n\n> 🔗 URL: ' + sourceUrl;
 }
 
 async function summarize() {
-  clearError()
-  $('resultCard').classList.remove('visible')
-  $('loader').classList.remove('visible')
+  clearError();
+  $('resultCard').classList.remove('visible');
+  $('loader').classList.remove('visible');
 
-  const url = $('urlInput').value.trim()
-  if (!url) { showError('URLを入力してください'); return }
-  if (!url.startsWith('http')) { showError('http または https で始まるURLを入力してください'); return }
+  var url = $('urlInput').value.trim();
+  if (!url) { showError('URLを入力してください'); return; }
+  if (url.indexOf('http') !== 0) { showError('http または https で始まるURLを入力してください'); return; }
 
-  const detectedYT = isYouTube(url)
-  const useYT = urlType === 'youtube' || (urlType === 'auto' && detectedYT)
+  var detectedYT = isYouTube(url);
+  var useYT = urlType === 'youtube' || (urlType === 'auto' && detectedYT);
 
-  $('runBtn').disabled = true
-  $('loader').classList.add('visible')
-  $('thumb').classList.remove('visible')
+  $('runBtn').disabled = true;
+  $('loader').classList.add('visible');
+  $('thumb').classList.remove('visible');
 
-  let prompt = ''
-  let sourceLabel = ''
-
-  const mdFormat = (sourceUrl) => `
-次の形式でMarkdown出力してください：
-
-## 📌 概要
-（テーマと目的を2〜3文で）
-
----
-
-## ✅ 主なポイント
-- **ポイント1**: 説明
-- **ポイント2**: 説明
-- **ポイント3**: 説明
-- **ポイント4**: 説明
-- **ポイント5**: 説明
-
----
-
-## 💡 結論・まとめ
-（最終的なメッセージや学びを2〜3文で）
-
----
-
-> 🔗 URL: ${sourceUrl}`
+  var prompt = '';
+  var sourceLabel = '';
 
   if (useYT) {
-    const videoId = extractVideoId(url)
-    if (!videoId) { showError('有効なYouTube URLを入力してください'); $('runBtn').disabled = false; $('loader').classList.remove('visible'); return }
+    var videoId = extractVideoId(url);
+    if (!videoId) {
+      showError('有効なYouTube URLを入力してください');
+      $('runBtn').disabled = false;
+      $('loader').classList.remove('visible');
+      return;
+    }
 
-    $('loaderMsg').textContent = 'YouTube動画を解析中…'
-    $('loaderSub').textContent = '字幕・説明欄を取得中'
+    $('loaderMsg').textContent = 'YouTube動画を解析中…';
+    $('loaderSub').textContent = '字幕・説明欄を取得中';
 
-    $('thumb').src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
-    $('thumb').classList.add('visible')
+    $('thumb').src = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
+    $('thumb').classList.add('visible');
 
-    // Get title via oEmbed
-    let title = ''
+    var title = '';
     try {
-      const oembed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`)
-      if (oembed.ok) title = (await oembed.json()).title || ''
-    } catch {}
+      var oembedUrl = 'https://www.youtube.com/oembed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId) + '&format=json';
+      var oembed = await fetch(oembedUrl);
+      if (oembed.ok) {
+        var oj = await oembed.json();
+        title = oj.title || '';
+      }
+    } catch(e) {}
 
-    // Fetch transcript and description from YouTube page
-    const ytContent = await fetchYouTubeContent(videoId)
+    var ytContent = await fetchYouTubeContent(videoId);
+    var cleanUrl = 'https://www.youtube.com/watch?v=' + videoId;
+    sourceLabel = '▶ YouTube';
 
-    const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`
-    sourceLabel = '▶ YouTube'
+    $('loaderMsg').textContent = 'AIで要約中…';
+    $('loaderSub').textContent = '';
 
-    $('loaderMsg').textContent = 'AIで要約中…'
-    $('loaderSub').textContent = ''
-
-    const contentText = ytContent.transcript || ytContent.description || ''
-    const contentLabel = ytContent.transcript ? '字幕テキスト' : ytContent.description ? '動画説明欄' : ''
+    var contentText = ytContent.transcript || ytContent.description || '';
+    var contentLabel = ytContent.transcript ? '字幕テキスト' : (ytContent.description ? '動画説明欄' : '');
 
     if (contentText) {
-      prompt = `以下のYouTube動画の${contentLabel}を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${title ? `タイトル: **${title}**\n` : ''}URL: ${cleanUrl}\n\n--- ${contentLabel} ---\n${contentText}\n--- ここまで ---\n${mdFormat(cleanUrl)}`
+      prompt = '以下のYouTube動画の' + contentLabel + 'を日本語で要約し、必ずMarkdown形式で出力してください。\n\n'
+        + (title ? 'タイトル: **' + title + '**\n' : '')
+        + 'URL: ' + cleanUrl + '\n\n--- ' + contentLabel + ' ---\n' + contentText + '\n--- ここまで ---\n'
+        + mdFormat(cleanUrl);
     } else {
-      prompt = `以下のYouTube動画のタイトルをもとに、動画の内容を日本語で推測・要約し、必ずMarkdown形式で出力してください。\n\n${title ? `タイトル: **${title}**\n` : ''}URL: ${cleanUrl}\n${mdFormat(cleanUrl)}`
+      prompt = '以下のYouTube動画のタイトルをもとに内容を日本語で推測・要約し、必ずMarkdown形式で出力してください。\n\n'
+        + (title ? 'タイトル: **' + title + '**\n' : '')
+        + 'URL: ' + cleanUrl + '\n'
+        + mdFormat(cleanUrl);
     }
 
   } else {
-    $('loaderMsg').textContent = 'ページを取得中…'
-    $('loaderSub').textContent = 'サイトによって数秒かかります'
-    sourceLabel = '🌐 ' + new URL(url).hostname
+    $('loaderMsg').textContent = 'ページを取得中…';
+    $('loaderSub').textContent = 'サイトによって数秒かかります';
 
-    let pageData
     try {
-      pageData = await fetchPageText(url)
-    } catch (e) {
-      showError(e.message)
-      $('runBtn').disabled = false
-      $('loader').classList.remove('visible')
-      return
+      var hostname = new URL(url).hostname;
+      sourceLabel = '🌐 ' + hostname;
+    } catch(e) { sourceLabel = '🌐 Web'; }
+
+    var pageData;
+    try {
+      pageData = await fetchPageText(url);
+    } catch(e) {
+      showError(e.message);
+      $('runBtn').disabled = false;
+      $('loader').classList.remove('visible');
+      return;
     }
 
-    $('loaderMsg').textContent = 'AI で要約中…'
-    $('loaderSub').textContent = ''
-    prompt = `以下のWebページの内容を日本語で要約し、必ずMarkdown形式で出力してください。\n\n${pageData.title ? `タイトル: **${pageData.title}**\n` : ''}URL: ${url}\n\n--- ページ本文 ---\n${pageData.text}\n--- 本文ここまで ---\n${mdFormat(url)}`
+    $('loaderMsg').textContent = 'AIで要約中…';
+    $('loaderSub').textContent = '';
+
+    prompt = '以下のWebページの内容を日本語で要約し、必ずMarkdown形式で出力してください。\n\n'
+      + (pageData.title ? 'タイトル: **' + pageData.title + '**\n' : '')
+      + 'URL: ' + url + '\n\n--- ページ本文 ---\n' + pageData.text + '\n--- 本文ここまで ---\n'
+      + mdFormat(url);
   }
 
-  $('sourceBadge').textContent = sourceLabel
+  $('sourceBadge').textContent = sourceLabel;
 
   try {
-    const res = await fetch('https://text.pollinations.ai/', {
+    var res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai', seed: 42, private: true })
-    })
-    if (!res.ok) throw new Error(`エラー (${res.status})`)
-    const text = await res.text()
-    if (!text) throw new Error('結果が取得できませんでした')
-    rawMarkdown = text
-    $('mdBody').innerHTML = parseMarkdown(text)
-    $('resultCard').classList.add('visible')
-  } catch (e) {
-    showError(e.message)
-    $('thumb').classList.remove('visible')
-  } finally {
-    $('runBtn').disabled = false
-    $('loader').classList.remove('visible')
+    });
+    if (!res.ok) throw new Error('エラー (' + res.status + ')');
+    var text = await res.text();
+    if (!text) throw new Error('結果が取得できませんでした');
+    rawMarkdown = text;
+    $('mdBody').innerHTML = parseMarkdown(text);
+    $('resultCard').classList.add('visible');
+  } catch(e) {
+    showError(e.message);
+    $('thumb').classList.remove('visible');
   }
-}
 
-function copyText(text, btnId) {
-  const btn = $(btnId)
-  const orig = btn.textContent
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).catch(() => execCopy(text))
-  } else {
-    execCopy(text)
-  }
-  btn.textContent = '✓ コピー済'
-  setTimeout(() => btn.textContent = orig, 1800)
+  $('runBtn').disabled = false;
+  $('loader').classList.remove('visible');
 }
 
 function execCopy(text) {
-  const ta = document.createElement('textarea')
-  ta.value = text
-  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;'
-  document.body.appendChild(ta)
-  ta.focus(); ta.select()
-  try { document.execCommand('copy') } catch {}
-  document.body.removeChild(ta)
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
 }
 
-function copyMarkdown() { copyText(rawMarkdown, 'btnMd') }
-function copyNotion() { copyText(rawMarkdown, 'btnNotion') }
+function copyText(text, btnId) {
+  var btn = $(btnId);
+  var orig = btn.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(function() { execCopy(text); });
+  } else {
+    execCopy(text);
+  }
+  btn.textContent = '✓ コピー済';
+  setTimeout(function() { btn.textContent = orig; }, 1800);
+}
+
+function copyMarkdown() { copyText(rawMarkdown, 'btnMd'); }
+function copyNotion() { copyText(rawMarkdown, 'btnNotion'); }
 </script>
 </body>
 </html>
