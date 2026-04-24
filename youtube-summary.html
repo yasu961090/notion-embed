@@ -240,34 +240,44 @@ async function fetchYouTubeContent(videoId) {
   } catch(e) { return {}; }
 }
 
+function parseHtml(html) {
+  var parser = new DOMParser();
+  var doc = parser.parseFromString(html, 'text/html');
+  ['script','style','nav','header','footer','aside','iframe','noscript'].forEach(function(tag) {
+    doc.querySelectorAll(tag).forEach(function(el) { el.remove(); });
+  });
+  var main = doc.querySelector('article, main, [role="main"], .post-content, .article-body, .entry-content') || doc.body;
+  var titleEl = doc.querySelector('title');
+  var title = titleEl ? titleEl.textContent.trim() : '';
+  var text = main ? (main.innerText || main.textContent || '') : '';
+  var cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 4000);
+  return cleaned.length >= 100 ? { title: title, text: cleaned } : null;
+}
+
 async function fetchPageText(url) {
   var proxies = [
-    'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
-    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
+    { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), json: true },
+    { url: 'https://corsproxy.io/?' + encodeURIComponent(url), json: false },
+    { url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), json: false },
+    { url: 'https://thingproxy.freeboard.io/fetch/' + url, json: false }
   ];
   for (var i = 0; i < proxies.length; i++) {
     try {
-      var res = await fetchWithTimeout(proxies[i], 9000);
+      var res = await fetchWithTimeout(proxies[i].url, 9000);
       if (!res.ok) continue;
-      var data = await res.json();
-      var html = data.contents || data;
-      if (!html) continue;
-
-      var parser = new DOMParser();
-      var doc = parser.parseFromString(html, 'text/html');
-      ['script','style','nav','header','footer','aside','iframe','noscript'].forEach(function(tag) {
-        doc.querySelectorAll(tag).forEach(function(el) { el.remove(); });
-      });
-      var main = doc.querySelector('article, main, [role="main"], .post-content, .article-body, .entry-content') || doc.body;
-      var titleEl = doc.querySelector('title');
-      var title = titleEl ? titleEl.textContent : '';
-      var text = main ? (main.innerText || main.textContent || '') : '';
-      var cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 4000);
-      if (cleaned.length < 100) continue;
-      return { title: title, text: cleaned };
+      var html;
+      if (proxies[i].json) {
+        var data = await res.json();
+        html = data.contents || '';
+      } else {
+        html = await res.text();
+      }
+      if (!html || html.length < 200) continue;
+      var result = parseHtml(html);
+      if (result) return result;
     } catch(e) {}
   }
-  throw new Error('ページの取得に失敗しました。アクセス制限があるサイトは対応できません。');
+  throw new Error('ページを取得できませんでした。会員制・有料記事・アクセス制限があるサイトは対応できません。');
 }
 
 function mdFormat(sourceUrl) {
