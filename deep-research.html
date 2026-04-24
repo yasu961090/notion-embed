@@ -181,11 +181,14 @@ textarea { resize: none; line-height: 1.55; }
   <textarea id="queryInput" rows="4"
     placeholder="例: 量子コンピュータの現状と2030年への展望&#10;例: LLMの最新アーキテクチャトレンドと実用化状況&#10;例: 日本の少子化対策の効果と課題&#10;&#10;Cmd+Enter で開始"></textarea>
 
-  <span class="lbl" style="margin-top:12px">Google AI API Key（無料）</span>
-  <input type="password" id="apiKey" placeholder="AIzaSy..." autocomplete="off">
-  <p style="font-size:10px;color:var(--dim);margin-top:4px">
-    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--blue)">aistudio.google.com</a> で無料取得 — Gemini 2.0 Flash を使用
-  </p>
+  <span class="lbl" style="margin-top:12px">AI API Key（無料）</span>
+  <input type="password" id="apiKey" placeholder="gsk_... または AIzaSy..." autocomplete="off">
+  <div style="font-size:10px;color:var(--dim);margin-top:5px;line-height:1.7">
+    <b style="color:var(--green)">推奨 → Groq</b>（日本から利用可・地域制限なし）:
+    <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--blue)">console.groq.com</a> で無料取得 — <code style="font-size:10px">gsk_...</code><br>
+    <b style="color:var(--muted)">代替 → Gemini</b>（地域制限あり）:
+    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--blue)">aistudio.google.com</a> — <code style="font-size:10px">AIzaSy...</code>
+  </div>
 
   <details style="margin-top:10px">
     <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
@@ -570,6 +573,79 @@ function geminiStream(messages, apiKey, onChunk) {
 }
 
 // ─────────────────────────────────────────────
+// Groq API (OpenAI-compatible, free, no region limit)
+// ─────────────────────────────────────────────
+var GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+var GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+function groqJSON(messages, apiKey) {
+  return fetch(GROQ_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify({
+      model: GROQ_MODEL, max_tokens: 2048, temperature: 0.2,
+      messages: messages.map(function(m){ return { role: 'user', content: m.content }; })
+    }),
+    signal: abort && abort.signal
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e){ throw new Error((e.error && e.error.message) || 'Groq ' + r.status); });
+    return r.json();
+  }).then(function(d) {
+    var text = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content || '';
+    var m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('JSONが見つかりません');
+    return JSON.parse(m[0]);
+  });
+}
+
+function groqStream(messages, apiKey, onChunk) {
+  return fetch(GROQ_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify({
+      model: GROQ_MODEL, max_tokens: 8192, temperature: 0.6, stream: true,
+      messages: messages.map(function(m){ return { role: 'user', content: m.content }; })
+    }),
+    signal: abort && abort.signal
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e){ throw new Error((e.error && e.error.message) || 'Groq stream ' + r.status); });
+    var reader = r.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    function read() {
+      return reader.read().then(function(chunk) {
+        if (chunk.done) return;
+        buf += dec.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        lines.forEach(function(line) {
+          if (!line.startsWith('data: ')) return;
+          var data = line.slice(6).trim();
+          if (data === '[DONE]') return;
+          try {
+            var ev = JSON.parse(data);
+            var text = ev.choices && ev.choices[0] && ev.choices[0].delta && ev.choices[0].delta.content;
+            if (text) onChunk(text);
+          } catch(e) {}
+        });
+        return read();
+      });
+    }
+    return read();
+  });
+}
+
+// Unified wrappers — auto-select provider by key prefix
+function aiJSON(messages, apiKey) {
+  if (apiKey.startsWith('gsk_')) return groqJSON(messages, apiKey);
+  return geminiJSON(messages, apiKey);
+}
+function aiStream(messages, apiKey, onChunk) {
+  if (apiKey.startsWith('gsk_')) return groqStream(messages, apiKey, onChunk);
+  return geminiStream(messages, apiKey, onChunk);
+}
+
+// ─────────────────────────────────────────────
 // Deep research pipeline
 // ─────────────────────────────────────────────
 async function deepResearch(query, apiKey, jinaKey) {
@@ -585,7 +661,7 @@ async function deepResearch(query, apiKey, jinaKey) {
   setPhase(1);
   log('🧠 リサーチ戦略を立案中...');
 
-  strategy = await geminiJSON([{
+  strategy = await aiJSON([{
     role: 'user',
     content:
       'You are an expert research strategist. For the research question below, generate ' + cfg.queries + ' diverse search queries (mix of Japanese and English) to gather comprehensive information from multiple angles.\n\n' +
@@ -626,7 +702,7 @@ async function deepResearch(query, apiKey, jinaKey) {
     var selectedIdx = [];
     if (fresh.length > cfg.sources) {
       try {
-        var sel = await geminiJSON([{
+        var sel = await aiJSON([{
           role: 'user',
           content:
             'Select the ' + cfg.sources + ' most relevant and authoritative sources.\n\n' +
@@ -670,7 +746,7 @@ async function deepResearch(query, apiKey, jinaKey) {
       setPhase(4);
       log('🔄 ギャップ分析 → フォローアップクエリ生成中...');
       try {
-        var analysis = await geminiJSON([{
+        var analysis = await aiJSON([{
           role: 'user',
           content:
             'Analyze the gathered information and identify knowledge gaps. Generate ' + cfg.queries + ' targeted follow-up queries.\n\n' +
@@ -706,7 +782,7 @@ async function deepResearch(query, apiKey, jinaKey) {
     return '[' + (i+1) + '] ' + s.title + '\nURL: ' + s.url + '\n\n' + s.content;
   }).join('\n\n' + '═'.repeat(60) + '\n\n');
 
-  await geminiStream([{
+  await aiStream([{
     role: 'user',
     content:
       'You are a world-class research analyst. Write a comprehensive, insightful research report in JAPANESE.\n\n' +
@@ -763,8 +839,8 @@ async function startResearch() {
 
   clearErr();
   if (!query) { showErr('リサーチ質問を入力してください。'); return; }
-  if (!apiKey || !apiKey.startsWith('AIza')) {
-    showErr('有効な Google AI API Key を入力してください（AIzaSy...）'); return;
+  if (!apiKey || (!apiKey.startsWith('AIza') && !apiKey.startsWith('gsk_'))) {
+    showErr('有効な API Key を入力してください（Groq: gsk_... / Gemini: AIzaSy...）'); return;
   }
 
   try { localStorage.setItem('dr_key', apiKey); } catch(e) {}
