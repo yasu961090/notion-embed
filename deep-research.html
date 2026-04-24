@@ -269,10 +269,13 @@ var JSEARCH = 'https://s.jina.ai/';
 var JREAD   = 'https://r.jina.ai/';
 
 var DEPTHS = {
-  1: { iter: 2, queries: 3, sources: 3, maxLen: 2500 },
-  2: { iter: 3, queries: 4, sources: 4, maxLen: 3000 },
-  3: { iter: 4, queries: 5, sources: 5, maxLen: 4000 }
+  1: { iter: 2, queries: 3, sources: 3, maxLen: 1200 },
+  2: { iter: 3, queries: 4, sources: 4, maxLen: 1500 },
+  3: { iter: 4, queries: 5, sources: 5, maxLen: 2000 }
 };
+// Groq free tier: 12,000 TPM limit — use tighter limits (Japanese ~1.5 tokens/char)
+var GROQ_MAX_LEN   = 600;  // per source when reading
+var GROQ_SYNTH_LEN = 400;  // per source in final synthesis
 
 // ─────────────────────────────────────────────
 // State
@@ -650,6 +653,10 @@ function aiStream(messages, apiKey, onChunk) {
 // ─────────────────────────────────────────────
 async function deepResearch(query, apiKey, jinaKey) {
   var cfg = DEPTHS[depth];
+  var isGroq = apiKey.startsWith('gsk_');
+  var readLen  = isGroq ? GROQ_MAX_LEN   : cfg.maxLen;
+  var synthLen = isGroq ? GROQ_SYNTH_LEN : cfg.maxLen;
+  if (isGroq) log('⚡ Groq モード — トークン節約設定で動作中');
   sources = []; cntSrc = 0; cntSearch = 0; cntIter = 0; rawReport = '';
   $('cntIterMax').textContent = cfg.iter;
   updStats();
@@ -729,7 +736,7 @@ async function deepResearch(query, apiKey, jinaKey) {
       if (visited.has(src.url)) return null;
       visited.add(src.url);
       log('📖 ' + (src.title || src.url).slice(0, 55) + '...');
-      var content = await jinaRead(src.url, jinaKey, cfg.maxLen).catch(function(e){
+      var content = await jinaRead(src.url, jinaKey, readLen).catch(function(e){
         if (e.name === 'AbortError') throw e;
         return '';
       });
@@ -779,30 +786,18 @@ async function deepResearch(query, apiKey, jinaKey) {
   }, 200);
 
   var srcCtx = sources.map(function(s,i){
-    return '[' + (i+1) + '] ' + s.title + '\nURL: ' + s.url + '\n\n' + s.content;
-  }).join('\n\n' + '═'.repeat(60) + '\n\n');
+    return '[' + (i+1) + '] ' + s.title + '\nURL: ' + s.url + '\n\n' + s.content.slice(0, synthLen);
+  }).join('\n\n---\n\n');
 
   await aiStream([{
     role: 'user',
     content:
-      'You are a world-class research analyst. Write a comprehensive, insightful research report in JAPANESE.\n\n' +
-      '## Research Question\n' + query + '\n\n' +
-      '## Sources (' + sources.length + ' sources across ' + cntIter + ' research iterations)\n' + srcCtx + '\n\n' +
-      '## Instructions\n' +
-      'Write a thorough Japanese research report with these sections:\n\n' +
-      '# エグゼクティブサマリー\n3〜5文で最重要な発見をまとめる。\n\n' +
-      '## 背景と文脈\nこのトピックを理解するための背景・コンテキスト。\n\n' +
-      '## 主要な発見\nテーマ別に整理（各テーマに##見出し、サブテーマに###）。具体的データ・数字・固有名詞を積極的に使う。\n\n' +
-      '## 詳細分析\n複数の情報を横断して洞察を引き出す深い分析。\n\n' +
-      '## 多角的な視点\n異なる立場・反論・限界・不確実性。\n\n' +
-      '## 結論と示唆\nこの情報が意味すること、行動や意思決定への含意。\n\n' +
-      '## 今後の展望\n今後の動向予測。\n\n' +
-      '## 重要ルール\n' +
-      '- 全ての事実に [N] 形式で引用番号をつける（N = 上記ソース番号）\n' +
-      '- Markdownフォーマット必須（##, ###, **太字**, - 箇条書き）\n' +
-      '- 記述的にならず分析的に書く\n' +
-      '- 目標: 日本語2000〜3500字\n' +
-      '- 前置きなしに # エグゼクティブサマリー から始める'
+      'Research analyst. Write a comprehensive report in JAPANESE based on sources below.\n\n' +
+      'Question: ' + query + '\n\n' +
+      'Sources:\n' + srcCtx + '\n\n' +
+      'Write in Japanese with sections: # エグゼクティブサマリー / ## 背景 / ## 主要な発見 / ## 分析 / ## 結論。\n' +
+      'Rules: cite facts as [N], use Markdown (##/###/**bold**/bullets), be analytical not descriptive.\n' +
+      'Target: 1500〜2500 Japanese chars. Start directly with # エグゼクティブサマリー.'
   }], apiKey, function(chunk) {
     appendReport(chunk);
   });
