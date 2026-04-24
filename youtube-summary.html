@@ -255,10 +255,14 @@ function parseHtml(html) {
 }
 
 async function fetchPageText(url) {
+  // AMPバージョンがあるサイト向けに代替URLも試みる
+  var ampUrl = url.replace(/\/$/, '') + '.amp';
   var proxies = [
     { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), json: true },
     { url: 'https://corsproxy.io/?' + encodeURIComponent(url), json: false },
+    { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(ampUrl), json: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), json: false },
+    { url: 'https://corsproxy.io/?' + encodeURIComponent(ampUrl), json: false },
     { url: 'https://thingproxy.freeboard.io/fetch/' + url, json: false }
   ];
   for (var i = 0; i < proxies.length; i++) {
@@ -329,6 +333,7 @@ async function summarize() {
     $('thumb').src = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
     $('thumb').classList.add('visible');
 
+    // oEmbed と YouTube本文取得を並列実行
     var oembedUrl = 'https://www.youtube.com/oembed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId) + '&format=json';
     var results = await Promise.all([
       fetchWithTimeout(oembedUrl, 5000).then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
