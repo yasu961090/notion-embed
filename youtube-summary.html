@@ -53,6 +53,7 @@
   .md-body strong { color: #e6edf3; }
   .md-body hr { border: none; border-top: 1px solid #30363d; margin: 14px 0; }
   .md-body blockquote { border-left: 3px solid #58a6ff; padding-left: 12px; color: #8b949e; margin: 8px 0; }
+  .md-body .doc-title { font-size: 17px; font-weight: 700; color: #e6edf3; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 2px solid #58a6ff; line-height: 1.4; }
   .action-row { display: flex; gap: 8px; margin-top: 10px; }
   .btn-copy-md { flex: 1; padding: 12px 8px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; background: #21262d; border: 1px solid #30363d; color: #8b949e; }
   .btn-copy-md:active { opacity: 0.7; }
@@ -391,8 +392,9 @@ async function summarize() {
     if (!res.ok) throw new Error('エラー (' + res.status + ')');
     var text = await res.text();
     if (!text) throw new Error('結果が取得できませんでした');
-    rawMarkdown = text;
-    $('mdBody').innerHTML = parseMarkdown(text);
+    var titleHtml = displayTitle ? '<div class="doc-title">' + displayTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '';
+    rawMarkdown = (displayTitle ? '# ' + displayTitle + '\n\n' : '') + text;
+    $('mdBody').innerHTML = titleHtml + parseMarkdown(text);
     $('resultCard').classList.add('visible');
   } catch(e) {
     showError(e.message);
