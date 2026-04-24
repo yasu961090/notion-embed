@@ -255,10 +255,14 @@ function parseHtml(html) {
 }
 
 async function fetchPageText(url) {
+  // AMPバージョンがあるサイト向けに代替URLも試みる
+  var ampUrl = url.replace(/\/$/, '') + '.amp';
   var proxies = [
     { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), json: true },
     { url: 'https://corsproxy.io/?' + encodeURIComponent(url), json: false },
+    { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(ampUrl), json: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), json: false },
+    { url: 'https://corsproxy.io/?' + encodeURIComponent(ampUrl), json: false },
     { url: 'https://thingproxy.freeboard.io/fetch/' + url, json: false }
   ];
   for (var i = 0; i < proxies.length; i++) {
