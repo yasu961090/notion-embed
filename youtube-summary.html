@@ -38,8 +38,10 @@
   .error.visible { display: block; }
   .result-card { display: none; margin-top: 12px; }
   .result-card.visible { display: block; }
-  .thumb { width: 100%; border-radius: 10px; margin-bottom: 12px; display: none; }
+  .thumb { width: 100%; border-radius: 10px; margin-bottom: 10px; display: none; }
   .thumb.visible { display: block; }
+  .result-title { display: none; font-size: 15px; font-weight: 700; color: #e6edf3; line-height: 1.5; margin-bottom: 8px; }
+  .result-title.visible { display: block; }
   .source-badge { font-size: 11px; color: #8b949e; background: #21262d; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; display: inline-block; margin-bottom: 10px; }
   .md-body { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 18px 16px; font-size: 14px; line-height: 1.8; color: #c9d1d9; }
   .md-body h2 { font-size: 15px; font-weight: 700; color: #e6edf3; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #30363d; }
@@ -51,6 +53,7 @@
   .md-body strong { color: #e6edf3; }
   .md-body hr { border: none; border-top: 1px solid #30363d; margin: 14px 0; }
   .md-body blockquote { border-left: 3px solid #58a6ff; padding-left: 12px; color: #8b949e; margin: 8px 0; }
+  .md-body .doc-title { font-size: 17px; font-weight: 700; color: #e6edf3; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 2px solid #58a6ff; line-height: 1.4; }
   .action-row { display: flex; gap: 8px; margin-top: 10px; }
   .btn-copy-md { flex: 1; padding: 12px 8px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; background: #21262d; border: 1px solid #30363d; color: #8b949e; }
   .btn-copy-md:active { opacity: 0.7; }
@@ -87,6 +90,7 @@
 
 <div class="result-card" id="resultCard">
   <img class="thumb" id="thumb" alt="thumbnail">
+  <div class="result-title" id="resultTitle"></div>
   <div class="source-badge" id="sourceBadge"></div>
   <div class="md-body" id="mdBody"></div>
   <div class="action-row">
@@ -147,6 +151,12 @@ function isYouTube(url) {
 function showError(msg) { $('errorMsg').textContent = msg; $('errorMsg').classList.add('visible'); }
 function clearError() { $('errorMsg').classList.remove('visible'); }
 
+function fetchWithTimeout(url, ms) {
+  var ctrl = new AbortController();
+  var timer = setTimeout(function() { ctrl.abort(); }, ms || 8000);
+  return fetch(url, { signal: ctrl.signal }).then(function(r) { clearTimeout(timer); return r; }, function(e) { clearTimeout(timer); throw e; });
+}
+
 function extractJsonString(html, key) {
   var marker = '"' + key + '":"';
   var start = html.indexOf(marker);
@@ -191,16 +201,9 @@ function extractCaptionUrl(html) {
         url += String.fromCharCode(code);
         i += 6;
       } else if (next === '/') {
-        url += '/';
-        i += 2;
-      } else {
-        url += next;
-        i += 2;
-      }
-    } else {
-      url += html[i];
-      i++;
-    }
+        url += '/'; i += 2;
+      } else { url += next; i += 2; }
+    } else { url += html[i]; i++; }
   }
   return (url.indexOf('timedtext') !== -1) ? url : '';
 }
@@ -208,36 +211,33 @@ function extractCaptionUrl(html) {
 async function fetchYouTubeContent(videoId) {
   try {
     var ytUrl = 'https://www.youtube.com/watch?v=' + videoId;
-    var res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(ytUrl));
+    var res = await fetchWithTimeout('https://api.allorigins.win/get?url=' + encodeURIComponent(ytUrl), 8000);
     if (!res.ok) return {};
     var data = await res.json();
     var html = data.contents;
     if (!html) return {};
 
-    var description = extractJsonString(html, 'shortDescription').slice(0, 2000);
+    var description = extractJsonString(html, 'shortDescription').slice(0, 1500);
     var captionUrl = extractCaptionUrl(html);
     var transcript = '';
 
     if (captionUrl) {
       try {
-        var cr = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(captionUrl));
+        var cr = await fetchWithTimeout('https://api.allorigins.win/get?url=' + encodeURIComponent(captionUrl), 6000);
         if (cr.ok) {
           var cd = await cr.json();
           var xml = cd.contents;
           if (xml && xml.indexOf('<text') !== -1) {
             var doc = new DOMParser().parseFromString(xml, 'text/xml');
-            var texts = Array.from(doc.querySelectorAll('text'));
-            transcript = texts.map(function(t) { return t.textContent; })
-              .join(' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
+            transcript = Array.from(doc.querySelectorAll('text'))
+              .map(function(t) { return t.textContent; })
+              .join(' ').replace(/\s+/g, ' ').trim().slice(0, 3000);
           }
         }
       } catch(e) {}
     }
-
     return { description: description, transcript: transcript };
-  } catch(e) {
-    return {};
-  }
+  } catch(e) { return {}; }
 }
 
 async function fetchPageText(url) {
@@ -247,7 +247,7 @@ async function fetchPageText(url) {
   ];
   for (var i = 0; i < proxies.length; i++) {
     try {
-      var res = await fetch(proxies[i]);
+      var res = await fetchWithTimeout(proxies[i], 9000);
       if (!res.ok) continue;
       var data = await res.json();
       var html = data.contents || data;
@@ -259,9 +259,10 @@ async function fetchPageText(url) {
         doc.querySelectorAll(tag).forEach(function(el) { el.remove(); });
       });
       var main = doc.querySelector('article, main, [role="main"], .post-content, .article-body, .entry-content') || doc.body;
-      var title = doc.querySelector('title') ? doc.querySelector('title').textContent : '';
+      var titleEl = doc.querySelector('title');
+      var title = titleEl ? titleEl.textContent : '';
       var text = main ? (main.innerText || main.textContent || '') : '';
-      var cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 5000);
+      var cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 4000);
       if (cleaned.length < 100) continue;
       return { title: title, text: cleaned };
     } catch(e) {}
@@ -273,10 +274,20 @@ function mdFormat(sourceUrl) {
   return '\n次の形式でMarkdown出力してください：\n\n## 📌 概要\n（テーマと目的を2〜3文で）\n\n---\n\n## ✅ 主なポイント\n- **ポイント1**: 説明\n- **ポイント2**: 説明\n- **ポイント3**: 説明\n- **ポイント4**: 説明\n- **ポイント5**: 説明\n\n---\n\n## 💡 結論・まとめ\n（最終的なメッセージや学びを2〜3文で）\n\n---\n\n> 🔗 URL: ' + sourceUrl;
 }
 
+function showTitle(text) {
+  if (text) {
+    $('resultTitle').textContent = text;
+    $('resultTitle').classList.add('visible');
+  } else {
+    $('resultTitle').classList.remove('visible');
+  }
+}
+
 async function summarize() {
   clearError();
   $('resultCard').classList.remove('visible');
   $('loader').classList.remove('visible');
+  $('resultTitle').classList.remove('visible');
 
   var url = $('urlInput').value.trim();
   if (!url) { showError('URLを入力してください'); return; }
@@ -291,6 +302,7 @@ async function summarize() {
 
   var prompt = '';
   var sourceLabel = '';
+  var displayTitle = '';
 
   if (useYT) {
     var videoId = extractVideoId(url);
@@ -301,23 +313,22 @@ async function summarize() {
       return;
     }
 
-    $('loaderMsg').textContent = 'YouTube動画を解析中…';
-    $('loaderSub').textContent = '字幕・説明欄を取得中';
+    $('loaderMsg').textContent = '字幕・タイトルを取得中…';
+    $('loaderSub').textContent = '並列で取得しています';
 
     $('thumb').src = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
     $('thumb').classList.add('visible');
 
-    var title = '';
-    try {
-      var oembedUrl = 'https://www.youtube.com/oembed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId) + '&format=json';
-      var oembed = await fetch(oembedUrl);
-      if (oembed.ok) {
-        var oj = await oembed.json();
-        title = oj.title || '';
-      }
-    } catch(e) {}
+    var oembedUrl = 'https://www.youtube.com/oembed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId) + '&format=json';
+    var results = await Promise.all([
+      fetchWithTimeout(oembedUrl, 5000).then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
+      fetchYouTubeContent(videoId)
+    ]);
+    var oembedData = results[0];
+    var ytContent = results[1];
 
-    var ytContent = await fetchYouTubeContent(videoId);
+    var title = oembedData.title || '';
+    displayTitle = title;
     var cleanUrl = 'https://www.youtube.com/watch?v=' + videoId;
     sourceLabel = '▶ YouTube';
 
@@ -358,6 +369,7 @@ async function summarize() {
       return;
     }
 
+    displayTitle = pageData.title || '';
     $('loaderMsg').textContent = 'AIで要約中…';
     $('loaderSub').textContent = '';
 
@@ -368,6 +380,7 @@ async function summarize() {
   }
 
   $('sourceBadge').textContent = sourceLabel;
+  showTitle(displayTitle);
 
   try {
     var res = await fetch('https://text.pollinations.ai/', {
@@ -378,12 +391,14 @@ async function summarize() {
     if (!res.ok) throw new Error('エラー (' + res.status + ')');
     var text = await res.text();
     if (!text) throw new Error('結果が取得できませんでした');
-    rawMarkdown = text;
-    $('mdBody').innerHTML = parseMarkdown(text);
+    var titleHtml = displayTitle ? '<div class="doc-title">' + displayTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '';
+    rawMarkdown = (displayTitle ? '# ' + displayTitle + '\n\n' : '') + text;
+    $('mdBody').innerHTML = titleHtml + parseMarkdown(text);
     $('resultCard').classList.add('visible');
   } catch(e) {
     showError(e.message);
     $('thumb').classList.remove('visible');
+    $('resultTitle').classList.remove('visible');
   }
 
   $('runBtn').disabled = false;
