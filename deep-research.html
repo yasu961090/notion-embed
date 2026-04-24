@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Deep Research Engine</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+  --border: #30363d; --text: #e6edf3; --muted: #8b949e; --dim: #484f58;
+  --blue: #58a6ff; --blue-bg: #1f6feb; --green: #3fb950;
+  --yellow: #d29922; --red: #f85149; --purple: #bc8cff;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: var(--bg); color: var(--text);
+  padding: 20px 16px 60px; min-height: 100vh;
+}
+
+/* Header */
+.hdr { text-align: center; margin-bottom: 24px; }
+.hdr h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.hdr p { font-size: 11px; color: var(--dim); margin-top: 5px; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+
+/* Labels */
+.lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; display: block; }
+
+/* Inputs */
+textarea, input[type="password"], input[type="text"] {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: inherit;
+  font-size: 14px; padding: 10px 12px; outline: none;
+  -webkit-appearance: none; transition: border-color .15s;
+}
+textarea:focus, input:focus { border-color: var(--blue); }
+textarea { resize: none; line-height: 1.55; }
+
+/* Buttons */
+.btn-run {
+  width: 100%; background: var(--blue-bg); border: none; color: #fff;
+  border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 600;
+  cursor: pointer; font-family: inherit; margin-top: 12px;
+  transition: opacity .15s; -webkit-tap-highlight-color: transparent;
+}
+.btn-run:disabled { opacity: .4; cursor: default; }
+.btn-run:active:not(:disabled) { opacity: .82; }
+
+.btn-stop {
+  background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.4);
+  color: var(--red); border-radius: 7px; padding: 7px 14px;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-sm {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--muted); border-radius: 6px; padding: 6px 12px;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Depth selector */
+.depth-row { display: flex; gap: 6px; margin-top: 10px; }
+.depth-btn {
+  flex: 1; padding: 8px 4px; border-radius: 7px; font-size: 11px;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface2);
+  color: var(--dim); text-align: center; font-family: inherit;
+  -webkit-tap-highlight-color: transparent; transition: all .15s;
+}
+.depth-btn.active { border-color: var(--blue); color: var(--blue); background: var(--bg); }
+.depth-btn span { display: block; font-size: 9px; margin-top: 2px; opacity: .7; }
+
+/* Phases */
+.phases { display: flex; gap: 4px; margin-bottom: 12px; }
+.phase {
+  flex: 1; text-align: center; font-size: 9.5px; padding: 7px 3px 9px;
+  border-radius: 8px; border: 1px solid var(--border); color: var(--dim);
+  background: var(--surface); position: relative; transition: all .3s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.phase.active { border-color: var(--blue); color: var(--blue); background: rgba(88,166,255,.05); }
+.phase.active::after {
+  content: ''; position: absolute; bottom: 3px; left: 50%;
+  transform: translateX(-50%); width: 4px; height: 4px;
+  border-radius: 50%; background: var(--blue); animation: pulse 1s infinite;
+}
+.phase.done { border-color: var(--green); color: var(--green); background: rgba(63,185,80,.05); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* Stats */
+.stats-bar { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+.stats-bar b { color: var(--text); }
+
+/* Log */
+.log-panel {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+  max-height: 200px; overflow-y: auto; font-size: 12px; line-height: 1.75;
+}
+.le { color: var(--muted); }
+.le.err { color: var(--red); }
+.le.warn { color: var(--yellow); }
+.le.ok { color: var(--green); }
+.lt { color: var(--dim); font-size: 10px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+
+/* Spinner */
+.spin-sm {
+  display: inline-block; width: 11px; height: 11px;
+  border: 2px solid var(--border); border-top-color: var(--blue);
+  border-radius: 50%; animation: spin .7s linear infinite;
+  margin-right: 5px; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error */
+.err-box {
+  display: none; color: var(--red); font-size: 13px; padding: 10px 12px;
+  background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.25);
+  border-radius: 8px; margin-top: 8px;
+}
+.err-box.show { display: block; }
+
+/* Report */
+.rpt-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.rpt-hdr h2 { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+/* Markdown body */
+.md { font-size: 14px; line-height: 1.8; color: #c9d1d9; }
+.md h1 { font-size: 17px; font-weight: 700; color: var(--text); margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.md h1:first-child { margin-top: 0; }
+.md h2 { font-size: 15px; font-weight: 700; color: var(--text); margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.md h2:first-child { margin-top: 0; }
+.md h3 { font-size: 13px; font-weight: 600; color: var(--blue); margin: 14px 0 6px; }
+.md h4 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; }
+.md p { margin: 6px 0; }
+.md ul, .md ol { padding-left: 20px; margin: 6px 0; }
+.md li { margin: 3px 0; }
+.md strong { color: var(--text); font-weight: 600; }
+.md em { color: #a5b4c3; font-style: italic; }
+.md code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
+.md pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 10px 0; }
+.md pre code { background: none; border: none; padding: 0; }
+.md a { color: var(--blue); text-decoration: none; }
+.md a:hover { text-decoration: underline; }
+.md hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.md blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--muted); margin: 8px 0; }
+.md sup.cite { color: var(--blue); font-size: 11px; cursor: pointer; font-weight: 600; }
+
+/* Cursor blink */
+.cur { display: inline-block; width: 2px; height: 1.1em; background: var(--blue); margin-left: 1px; animation: blink .65s infinite; vertical-align: text-bottom; }
+@keyframes blink { 0%,100%{opacity:1} 49%{opacity:1} 50%,99%{opacity:0} }
+
+/* Sources */
+.src-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.src-item:last-child { border-bottom: none; }
+.src-num {
+  min-width: 24px; height: 24px; border-radius: 50%;
+  background: var(--surface2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--muted); flex-shrink: 0;
+}
+.src-info { flex: 1; min-width: 0; }
+.src-title { font-size: 13px; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src-url { font-size: 11px; color: var(--blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.src-meta { font-size: 10px; color: var(--dim); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Deep Research Engine</h1>
+  <p>AIが自律的に調査・分析・統合するディープリサーチ</p>
+</div>
+
+<!-- Input -->
+<div class="card" id="inputCard">
+  <span class="lbl">リサーチ質問</span>
+  <textarea id="queryInput" rows="4"
+    placeholder="例: 量子コンピュータの現状と2030年への展望&#10;例: LLMの最新アーキテクチャトレンドと実用化状況&#10;例: 日本の少子化対策の効果と課題&#10;&#10;Cmd+Enter で開始"></textarea>
+
+  <span class="lbl" style="margin-top:12px">Anthropic API Key</span>
+  <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+
+  <details style="margin-top:10px">
+    <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
+      <span id="jArrow" style="font-size:9px;transition:transform .2s">▶</span> Jina AI Key（オプション・Webページ取得精度向上）
+    </summary>
+    <div style="margin-top:8px">
+      <input type="password" id="jinaKey" placeholder="jina_... （jina.ai で無料取得）" autocomplete="off">
+      <p style="font-size:10px;color:var(--dim);margin-top:5px">未入力の場合はWikipediaフォールバックを使用。Jinaキーあり = 任意Webページを取得可能。</p>
+    </div>
+  </details>
+
+  <div style="margin-top:12px">
+    <span class="lbl">調査の深さ</span>
+    <div class="depth-row">
+      <button class="depth-btn active" data-d="1" onclick="setDepth(1)">
+        標準<span>2反復 / 3ソース</span>
+      </button>
+      <button class="depth-btn" data-d="2" onclick="setDepth(2)">
+        深い<span>3反復 / 4ソース</span>
+      </button>
+      <button class="depth-btn" data-d="3" onclick="setDepth(3)">
+        最深<span>4反復 / 5ソース</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="err-box" id="errBox"></div>
+  <button class="btn-run" id="startBtn" onclick="startResearch()">調査開始</button>
+</div>
+
+<!-- Progress -->
+<div class="card" id="progCard" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span id="progLabel" style="font-size:13px;font-weight:600;color:var(--muted)">
+      <span class="spin-sm"></span>調査中...
+    </span>
+    <button class="btn-stop" onclick="stopResearch()">停止</button>
+  </div>
+
+  <div class="phases">
+    <div class="phase" id="ph1">戦略立案</div>
+    <div class="phase" id="ph2">初回調査</div>
+    <div class="phase" id="ph3">深掘り</div>
+    <div class="phase" id="ph4">ギャップ分析</div>
+    <div class="phase" id="ph5">レポート</div>
+  </div>
+
+  <div class="stats-bar">
+    <span>ソース: <b id="cntSrc">0</b></span>
+    <span>検索: <b id="cntSearch">0</b></span>
+    <span>反復: <b id="cntIter">0</b> / <b id="cntIterMax">-</b></span>
+  </div>
+
+  <div class="log-panel" id="logPanel"></div>
+</div>
+
+<!-- Report -->
+<div class="card" id="rptCard" style="display:none">
+  <div class="rpt-hdr">
+    <h2>リサーチレポート</h2>
+    <button class="btn-sm" onclick="copyReport()">コピー</button>
+  </div>
+  <div class="md" id="rptBody"></div>
+</div>
+
+<!-- Sources -->
+<div class="card" id="srcCard" style="display:none">
+  <span class="lbl">参考ソース</span>
+  <div id="srcList"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────
+var CLAUDE = 'https://api.anthropic.com/v1/messages';
+var JSEARCH = 'https://s.jina.ai/';
+var JREAD   = 'https://r.jina.ai/';
+var MODEL   = 'claude-sonnet-4-6';
+
+var DEPTHS = {
+  1: { iter: 2, queries: 3, sources: 3, maxLen: 2500 },
+  2: { iter: 3, queries: 4, sources: 4, maxLen: 3000 },
+  3: { iter: 4, queries: 5, sources: 5, maxLen: 4000 }
+};
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+var depth = 1;
+var abort = null;
+var rawReport = '';
+var sources = [];
+var cntSrc = 0, cntSearch = 0, cntIter = 0;
+
+// ─────────────────────────────────────────────
+// UI helpers
+// ─────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+function setDepth(d) {
+  depth = d;
+  document.querySelectorAll('.depth-btn').forEach(function(b) {
+    b.classList.toggle('active', +b.dataset.d === d);
+  });
+}
+
+function log(msg, cls) {
+  var el = $('logPanel');
+  var d = document.createElement('div');
+  d.className = 'le' + (cls ? ' ' + cls : '');
+  var now = new Date();
+  var t = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(function(n){ return String(n).padStart(2,'0'); }).join(':');
+  d.innerHTML = '<span class="lt">' + t + '</span>' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setPhase(n) {
+  for (var i = 1; i <= 5; i++) {
+    var el = $('ph' + i);
+    if (!el) continue;
+    el.className = 'phase' + (i < n ? ' done' : i === n ? ' active' : '');
+  }
+}
+
+function updStats() {
+  $('cntSrc').textContent    = cntSrc;
+  $('cntSearch').textContent = cntSearch;
+  $('cntIter').textContent   = cntIter;
+}
+
+function showErr(msg) {
+  var el = $('errBox');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function clearErr() { $('errBox').classList.remove('show'); }
+
+function appendReport(text) {
+  rawReport += text;
+  $('rptBody').innerHTML = parseMd(rawReport) + '<span class="cur"></span>';
+  var doc = document.documentElement;
+  if (doc.scrollHeight - doc.scrollTop - doc.clientHeight < 300)
+    window.scrollTo(0, doc.scrollHeight);
+}
+
+function copyReport() {
+  navigator.clipboard && navigator.clipboard.writeText(rawReport).then(function() {
+    var b = document.querySelector('.rpt-hdr .btn-sm');
+    b.textContent = 'コピー済み!';
+    setTimeout(function(){ b.textContent = 'コピー'; }, 2000);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Markdown parser
+// ─────────────────────────────────────────────
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function inlineFmt(s) {
+  s = s
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[(\d+)\]/g,'<sup class="cite">[$1]</sup>');
+  return s;
+}
+
+function parseMd(md) {
+  if (!md) return '';
+  var lines = md.split('\n');
+  var html = '';
+  var inCode = false, codeLang = '', codeLines = [];
+  var inUl = false, inOl = false;
+
+  function closeList() {
+    if (inUl) { html += '</ul>'; inUl = false; }
+    if (inOl) { html += '</ol>'; inOl = false; }
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+
+    if (line.startsWith('```')) {
+      if (!inCode) {
+        closeList();
+        inCode = true; codeLang = line.slice(3).trim(); codeLines = [];
+      } else {
+        inCode = false;
+        html += '<pre><code>' + esc(codeLines.join('\n')) + '</code></pre>';
+      }
+      continue;
+    }
+    if (inCode) { codeLines.push(line); continue; }
+
+    if (line.startsWith('#### ')) {
+      closeList(); html += '<h4>' + inlineFmt(esc(line.slice(5))) + '</h4>';
+    } else if (line.startsWith('### ')) {
+      closeList(); html += '<h3>' + inlineFmt(esc(line.slice(4))) + '</h3>';
+    } else if (line.startsWith('## ')) {
+      closeList(); html += '<h2>' + inlineFmt(esc(line.slice(3))) + '</h2>';
+    } else if (line.startsWith('# ')) {
+      closeList(); html += '<h1>' + inlineFmt(esc(line.slice(2))) + '</h1>';
+    } else if (/^[-*]{3,}$/.test(line.trim())) {
+      closeList(); html += '<hr>';
+    } else if (/^[-*] /.test(line)) {
+      if (inOl) { html += '</ol>'; inOl = false; }
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += '<li>' + inlineFmt(esc(line.replace(/^[-*] /,''))) + '</li>';
+    } else if (/^\d+\. /.test(line)) {
+      if (inUl) { html += '</ul>'; inUl = false; }
+      if (!inOl) { html += '<ol>'; inOl = true; }
+      html += '<li>' + inlineFmt(esc(line.replace(/^\d+\. /,''))) + '</li>';
+    } else if (line.startsWith('> ')) {
+      closeList(); html += '<blockquote>' + inlineFmt(esc(line.slice(2))) + '</blockquote>';
+    } else if (line.trim() === '') {
+      closeList();
+    } else {
+      closeList(); html += '<p>' + inlineFmt(esc(line)) + '</p>';
+    }
+  }
+  closeList();
+  if (inCode) html += '<pre><code>' + esc(codeLines.join('\n')) + '</code></pre>';
+  return html;
+}
+
+// ─────────────────────────────────────────────
+// API wrappers
+// ─────────────────────────────────────────────
+
+// Wikipedia search (free, CORS-friendly, no key needed)
+function wikiSearch(query) {
+  var langs = ['ja', 'en'];
+  var promises = langs.map(function(lang) {
+    var url = 'https://' + lang + '.wikipedia.org/w/api.php?action=query&list=search' +
+      '&srsearch=' + encodeURIComponent(query) +
+      '&format=json&srlimit=5&origin=*';
+    return fetch(url, { signal: abort && abort.signal })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var hits = (d.query && d.query.search) || [];
+        return hits.map(function(h) {
+          return {
+            url: 'https://' + lang + '.wikipedia.org/wiki/' + encodeURIComponent(h.title.replace(/ /g,'_')),
+            title: h.title,
+            description: h.snippet.replace(/<[^>]*>/g,'')
+          };
+        });
+      })
+      .catch(function(e) { if (e.name === 'AbortError') throw e; return []; });
+  });
+  return Promise.all(promises).then(function(arr) {
+    return arr.reduce(function(a,b){ return a.concat(b); }, []);
+  });
+}
+
+// Wikipedia article content (for Wikipedia URLs, no Jina needed)
+function wikiContent(url, maxLen) {
+  var m = url.match(/wikipedia\.org\/wiki\/(.+)/);
+  if (!m) return Promise.resolve('');
+  var lang = url.includes('ja.wikipedia') ? 'ja' : 'en';
+  var title = decodeURIComponent(m[1]);
+  var apiUrl = 'https://' + lang + '.wikipedia.org/w/api.php?action=query' +
+    '&titles=' + encodeURIComponent(title) +
+    '&prop=extracts&explaintext=1&exsectionformat=plain&format=json&origin=*';
+  return fetch(apiUrl, { signal: abort && abort.signal })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var pages = d.query && d.query.pages;
+      if (!pages) return '';
+      var page = Object.values(pages)[0];
+      return (page.extract || '').slice(0, maxLen || 3000);
+    })
+    .catch(function(e) { if (e.name === 'AbortError') throw e; return ''; });
+}
+
+function jinaSearch(query, jinaKey) {
+  cntSearch++; updStats();
+  var headers = { 'Accept': 'application/json', 'X-Return-Format': 'json' };
+  if (jinaKey) headers['Authorization'] = 'Bearer ' + jinaKey;
+
+  return fetch(JSEARCH + encodeURIComponent(query), { headers: headers, signal: abort && abort.signal })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Jina ' + r.status);
+      return r.json();
+    })
+    .then(function(j) { return j.data || []; })
+    .catch(function(e) {
+      if (e.name === 'AbortError') throw e;
+      log('  Jinaフォールバック → Wikipedia検索', 'warn');
+      return wikiSearch(query);
+    });
+}
+
+function jinaRead(url, jinaKey, maxLen) {
+  // Wikipedia URLs: use Wikipedia API directly (no CORS issues)
+  if (url.includes('wikipedia.org/wiki/')) {
+    return wikiContent(url, maxLen);
+  }
+
+  // Other URLs: try Jina Reader (with key if available)
+  var headers = {};
+  if (jinaKey) headers['Authorization'] = 'Bearer ' + jinaKey;
+
+  return fetch(JREAD + url, { headers: headers, signal: abort && abort.signal })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Jread ' + r.status);
+      return r.text();
+    })
+    .then(function(t) { return t.slice(0, maxLen || 2500); })
+    .catch(function(e) {
+      if (e.name === 'AbortError') throw e;
+      return '';
+    });
+}
+
+function claudeJSON(messages, apiKey) {
+  return fetch(CLAUDE, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: 2048, temperature: 0.2, messages: messages }),
+    signal: abort && abort.signal
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e){ throw new Error(e.error && e.error.message || 'Claude API ' + r.status); });
+    return r.json();
+  }).then(function(d) {
+    var text = d.content && d.content[0] && d.content[0].text || '';
+    var m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('JSONが見つかりません');
+    return JSON.parse(m[0]);
+  });
+}
+
+function claudeStream(messages, apiKey, onChunk) {
+  return fetch(CLAUDE, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: 8192, temperature: 0.6, stream: true, messages: messages }),
+    signal: abort && abort.signal
+  }).then(function(r) {
+    if (!r.ok) return r.json().then(function(e){ throw new Error(e.error && e.error.message || 'Stream error ' + r.status); });
+    var reader = r.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    function read() {
+      return reader.read().then(function(chunk) {
+        if (chunk.done) return;
+        buf += dec.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        lines.forEach(function(line) {
+          if (!line.startsWith('data: ')) return;
+          var data = line.slice(6).trim();
+          if (data === '[DONE]') return;
+          try {
+            var ev = JSON.parse(data);
+            if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta')
+              onChunk(ev.delta.text);
+          } catch(e) {}
+        });
+        return read();
+      });
+    }
+    return read();
+  });
+}
+
+// ─────────────────────────────────────────────
+// Deep research pipeline
+// ─────────────────────────────────────────────
+async function deepResearch(query, apiKey, jinaKey) {
+  var cfg = DEPTHS[depth];
+  sources = []; cntSrc = 0; cntSearch = 0; cntIter = 0; rawReport = '';
+  $('cntIterMax').textContent = cfg.iter;
+  updStats();
+
+  var visited = new Set();
+  var strategy, currentQueries;
+
+  // ── Phase 1: Strategy ──────────────────────
+  setPhase(1);
+  log('🧠 リサーチ戦略を立案中...');
+
+  strategy = await claudeJSON([{
+    role: 'user',
+    content:
+      'You are an expert research strategist. For the research question below, generate ' + cfg.queries + ' diverse search queries (mix of Japanese and English) to gather comprehensive information from multiple angles.\n\n' +
+      'Research question: ' + query + '\n\n' +
+      'Return ONLY valid JSON (no markdown wrapping):\n' +
+      '{"queries":["q1","q2","q3"],"focus":"調査の焦点（日本語）","key_aspects":["aspect1","aspect2","aspect3"]}'
+  }], apiKey);
+
+  currentQueries = strategy.queries || [query];
+  log('📋 焦点: ' + (strategy.focus || ''));
+  if (strategy.key_aspects && strategy.key_aspects.length)
+    log('🔑 主要観点: ' + strategy.key_aspects.join(' / '));
+
+  // ── Iteration loop ─────────────────────────
+  for (var iter = 0; iter < cfg.iter; iter++) {
+    cntIter = iter + 1; updStats();
+    setPhase(iter === 0 ? 2 : 3);
+    log('\n🔍 反復 ' + (iter+1) + '/' + cfg.iter + ' — 検索実行中');
+
+    // Search (parallel)
+    var allHits = [];
+    var searchPromises = currentQueries.map(function(q) {
+      log('  ↳ "' + q + '"');
+      return jinaSearch(q, jinaKey).then(function(r) { allHits = allHits.concat(r); });
+    });
+    await Promise.all(searchPromises);
+
+    // Deduplicate
+    var seen = new Set();
+    var fresh = allHits.filter(function(r) {
+      if (!r || !r.url || visited.has(r.url) || seen.has(r.url)) return false;
+      seen.add(r.url); return true;
+    });
+    log('📊 ' + fresh.length + '件の新規結果');
+    if (!fresh.length) { log('新しいソースなし', 'warn'); break; }
+
+    // Select best sources
+    var selectedIdx = [];
+    if (fresh.length > cfg.sources) {
+      try {
+        var sel = await claudeJSON([{
+          role: 'user',
+          content:
+            'Select the ' + cfg.sources + ' most relevant and authoritative sources.\n\n' +
+            'Research question: ' + query + '\nFocus: ' + (strategy.focus||'') + '\n\n' +
+            'Candidates:\n' +
+            fresh.slice(0, 20).map(function(r,i){
+              return '['+i+'] '+r.url+'\n'+(r.title||'')+(r.description ? '\n'+(r.description||'').slice(0,150) : '');
+            }).join('\n\n') + '\n\n' +
+            'Return ONLY JSON: {"selected":[0,2,4]}'
+        }], apiKey);
+        selectedIdx = (sel.selected || []).slice(0, cfg.sources);
+      } catch(e) {
+        if (e.name === 'AbortError') throw e;
+        selectedIdx = Array.from({length: cfg.sources}, function(_,i){ return i; });
+        log('ソース選択エラー、上位を使用', 'warn');
+      }
+    } else {
+      selectedIdx = fresh.map(function(_,i){ return i; });
+    }
+
+    // Read sources (parallel)
+    var toRead = selectedIdx.map(function(i){ return fresh[i]; }).filter(Boolean);
+    var readPromises = toRead.map(async function(src) {
+      if (visited.has(src.url)) return null;
+      visited.add(src.url);
+      log('📖 ' + (src.title || src.url).slice(0, 55) + '...');
+      var content = await jinaRead(src.url, jinaKey, cfg.maxLen).catch(function(e){
+        if (e.name === 'AbortError') throw e;
+        return '';
+      });
+      if (!content || content.length < 80) return null;
+      cntSrc++; updStats();
+      return { url: src.url, title: src.title || src.url, content: content, iter: iter+1 };
+    });
+    var read = (await Promise.all(readPromises)).filter(Boolean);
+    sources = sources.concat(read);
+    log('✅ ' + read.length + '件読み込み完了 (累計 ' + sources.length + '件)', 'ok');
+
+    // Gap analysis + follow-up queries (not last iter)
+    if (iter < cfg.iter - 1) {
+      setPhase(4);
+      log('🔄 ギャップ分析 → フォローアップクエリ生成中...');
+      try {
+        var analysis = await claudeJSON([{
+          role: 'user',
+          content:
+            'Analyze the gathered information and identify knowledge gaps. Generate ' + cfg.queries + ' targeted follow-up queries.\n\n' +
+            'Research question: ' + query + '\n\n' +
+            'Sources gathered (' + sources.length + ' total, last 5 shown):\n' +
+            sources.slice(-5).map(function(s){
+              return 'TITLE: ' + s.title + '\n' + s.content.slice(0, 400);
+            }).join('\n\n---\n\n') + '\n\n' +
+            'Return ONLY JSON:\n' +
+            '{"key_finding":"主な発見（日本語1文）","gaps":["gap1","gap2"],"followup_queries":["q1","q2",...]}'
+        }], apiKey);
+        currentQueries = analysis.followup_queries || currentQueries;
+        log('💡 ' + (analysis.key_finding || ''));
+        if (analysis.gaps && analysis.gaps.length)
+          log('❓ 未解明: ' + analysis.gaps.slice(0,3).join(' / '));
+      } catch(e) {
+        if (e.name === 'AbortError') throw e;
+        log('フォローアップ生成エラー', 'warn');
+      }
+    }
+  }
+
+  // ── Phase 5: Final synthesis ───────────────
+  setPhase(5);
+  log('\n✍️ 最終レポートを生成中...');
+
+  $('rptCard').style.display = 'block';
+  setTimeout(function(){
+    $('rptCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 200);
+
+  var srcCtx = sources.map(function(s,i){
+    return '[' + (i+1) + '] ' + s.title + '\nURL: ' + s.url + '\n\n' + s.content;
+  }).join('\n\n' + '═'.repeat(60) + '\n\n');
+
+  await claudeStream([{
+    role: 'user',
+    content:
+      'You are a world-class research analyst. Write a comprehensive, insightful research report in JAPANESE.\n\n' +
+      '## Research Question\n' + query + '\n\n' +
+      '## Sources (' + sources.length + ' sources across ' + cntIter + ' research iterations)\n' + srcCtx + '\n\n' +
+      '## Instructions\n' +
+      'Write a thorough Japanese research report with these sections:\n\n' +
+      '# エグゼクティブサマリー\n3〜5文で最重要な発見をまとめる。\n\n' +
+      '## 背景と文脈\nこのトピックを理解するための背景・コンテキスト。\n\n' +
+      '## 主要な発見\nテーマ別に整理（各テーマに##見出し、サブテーマに###）。具体的データ・数字・固有名詞を積極的に使う。\n\n' +
+      '## 詳細分析\n複数の情報を横断して洞察を引き出す深い分析。\n\n' +
+      '## 多角的な視点\n異なる立場・反論・限界・不確実性。\n\n' +
+      '## 結論と示唆\nこの情報が意味すること、行動や意思決定への含意。\n\n' +
+      '## 今後の展望\n今後の動向予測。\n\n' +
+      '## 重要ルール\n' +
+      '- 全ての事実に [N] 形式で引用番号をつける（N = 上記ソース番号）\n' +
+      '- Markdownフォーマット必須（##, ###, **太字**, - 箇条書き）\n' +
+      '- 記述的にならず分析的に書く\n' +
+      '- 目標: 日本語2000〜3500字\n' +
+      '- 前置きなしに # エグゼクティブサマリー から始める'
+  }], apiKey, function(chunk) {
+    appendReport(chunk);
+  });
+
+  // Finalize
+  $('rptBody').innerHTML = parseMd(rawReport);
+
+  // Show sources
+  var srcList = $('srcList');
+  srcList.innerHTML = sources.map(function(s, i) {
+    return '<div class="src-item">' +
+      '<div class="src-num">' + (i+1) + '</div>' +
+      '<div class="src-info">' +
+        '<div class="src-title">' + esc(s.title) + '</div>' +
+        '<a class="src-url" href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.url) + '</a>' +
+        '<div class="src-meta">反復 ' + s.iter + ' で取得</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  $('srcCard').style.display = 'block';
+
+  log('🎉 ディープリサーチ完了！', 'ok');
+  $('progLabel').innerHTML = '✅ 調査完了';
+  setPhase(6);
+}
+
+// ─────────────────────────────────────────────
+// Start / Stop
+// ─────────────────────────────────────────────
+async function startResearch() {
+  var query = $('queryInput').value.trim();
+  var apiKey = $('apiKey').value.trim();
+  var jinaKey = $('jinaKey').value.trim();
+
+  clearErr();
+  if (!query) { showErr('リサーチ質問を入力してください。'); return; }
+  if (!apiKey || !apiKey.startsWith('sk-ant-')) {
+    showErr('有効な Anthropic API Key を入力してください（sk-ant-...）'); return;
+  }
+
+  try { localStorage.setItem('dr_key', apiKey); } catch(e) {}
+  try { if (jinaKey) localStorage.setItem('dr_jina', jinaKey); } catch(e) {}
+
+  if (jinaKey) log('🔑 Jina AI Keyあり — 任意のWebページを取得可能');
+  else log('ℹ️ Jina AI Keyなし — Wikipedia検索をフォールバックとして使用');
+
+  $('startBtn').disabled = true;
+  $('progCard').style.display = 'block';
+  $('rptCard').style.display = 'none';
+  $('srcCard').style.display = 'none';
+  $('logPanel').innerHTML = '';
+  $('rptBody').innerHTML = '';
+  $('progLabel').innerHTML = '<span class="spin-sm"></span>調査中...';
+  $('progCard').scrollIntoView({ behavior: 'smooth' });
+
+  abort = new AbortController();
+
+  try {
+    await deepResearch(query, apiKey, jinaKey);
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      log('調査を停止しました。', 'warn');
+      $('progLabel').textContent = '停止';
+    } else {
+      log('エラー: ' + e.message, 'err');
+      showErr('エラーが発生しました: ' + e.message);
+      $('progLabel').textContent = 'エラー';
+    }
+  } finally {
+    $('startBtn').disabled = false;
+    abort = null;
+  }
+}
+
+function stopResearch() {
+  if (abort) abort.abort();
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    var saved = localStorage.getItem('dr_key');
+    if (saved) $('apiKey').value = saved;
+    var savedJina = localStorage.getItem('dr_jina');
+    if (savedJina) $('jinaKey').value = savedJina;
+  } catch(e) {}
+
+  // Toggle arrow on details open/close
+  var det = document.querySelector('details');
+  if (det) det.addEventListener('toggle', function() {
+    $('jArrow').style.transform = det.open ? 'rotate(90deg)' : '';
+  });
+
+  $('queryInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startResearch();
+  });
+});
+</script>
+</body>
+</html>
