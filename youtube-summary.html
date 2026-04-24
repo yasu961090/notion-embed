@@ -255,7 +255,25 @@ function parseHtml(html) {
 }
 
 async function fetchPageText(url) {
-  // AMPバージョンがあるサイト向けに代替URLも試みる
+  // 1. Jina AI Reader: JS描画サイト・ニュースサイトに強い専用サービス
+  try {
+    var jinaRes = await fetchWithTimeout('https://r.jina.ai/' + url, 15000);
+    if (jinaRes.ok) {
+      var jinaText = await jinaRes.text();
+      if (jinaText && jinaText.length > 300) {
+        var titleMatch = jinaText.match(/^Title:\s*(.+)$/m);
+        var title = titleMatch ? titleMatch[1].trim() : '';
+        var cleaned = jinaText
+          .replace(/^(Title|URL|Published Time|Description|Author|Source):\s*.+\n?/gm, '')
+          .replace(/!\[.*?\]\(.*?\)/g, '')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\s+/g, ' ').trim().slice(0, 4000);
+        if (cleaned.length >= 100) return { title: title, text: cleaned };
+      }
+    }
+  } catch(e) {}
+
+  // 2. CORSプロキシ（フォールバック）
   var ampUrl = url.replace(/\/$/, '') + '.amp';
   var proxies = [
     { url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), json: true },
