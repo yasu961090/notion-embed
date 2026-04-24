@@ -54,6 +54,9 @@
   .md-body hr { border: none; border-top: 1px solid #30363d; margin: 14px 0; }
   .md-body blockquote { border-left: 3px solid #58a6ff; padding-left: 12px; color: #8b949e; margin: 8px 0; }
   .md-body .doc-title { font-size: 17px; font-weight: 700; color: #e6edf3; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 2px solid #58a6ff; line-height: 1.4; }
+  .md-body h2.insight { color: #f0b429; border-bottom-color: rgba(240,180,41,0.35); background: rgba(240,180,41,0.08); padding: 6px 10px; border-radius: 8px 8px 0 0; margin-top: 18px; }
+  .md-body h2.insight + ul { background: rgba(240,180,41,0.05); border: 1px solid rgba(240,180,41,0.25); border-top: none; border-radius: 0 0 8px 8px; padding: 10px 12px 10px 30px; margin: 0 0 14px; }
+  .md-body h2.insight + ul li { color: #f0d080; margin: 6px 0; }
   .action-row { display: flex; gap: 8px; margin-top: 10px; }
   .btn-copy-md { flex: 1; padding: 12px 8px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; background: #21262d; border: 1px solid #30363d; color: #8b949e; }
   .btn-copy-md:active { opacity: 0.7; }
@@ -113,6 +116,7 @@ function setType(t) {
 function parseMarkdown(md) {
   return md
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^## (⚡.+)$/gm, '<h2 class="insight">$1</h2>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^---$/gm, '<hr>')
@@ -303,7 +307,7 @@ async function fetchPageText(url) {
 }
 
 function mdFormat(sourceUrl) {
-  return '\n次の形式でMarkdown出力してください：\n\n## 📌 概要\n（テーマと目的を2〜3文で）\n\n---\n\n## ✅ 主なポイント\n- **ポイント1**: 説明\n- **ポイント2**: 説明\n- **ポイント3**: 説明\n- **ポイント4**: 説明\n- **ポイント5**: 説明\n\n---\n\n## 💡 結論・まとめ\n（最終的なメッセージや学びを2〜3文で）\n\n---\n\n> 🔗 URL: ' + sourceUrl;
+  return '\n次の形式でMarkdown出力してください：\n\n## 📌 概要\n（テーマと目的を2〜3文で）\n\n---\n\n## ✅ 主なポイント\n- **ポイント1**: 説明\n- **ポイント2**: 説明\n- **ポイント3**: 説明\n- **ポイント4**: 説明\n- **ポイント5**: 説明\n\n---\n\n## ⚡ 重要・示唆\n- **示唆1**: この内容から特に重要な気づきや行動につながる点\n- **示唆2**: 見落としやすいが本質的な視点\n- **示唆3**: 実践や応用に活かせるポイント\n\n---\n\n## 💡 結論・まとめ\n（最終的なメッセージや学びを2〜3文で）\n\n---\n\n> 🔗 URL: ' + sourceUrl;
 }
 
 function showTitle(text) {
