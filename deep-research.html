@@ -273,9 +273,10 @@ var DEPTHS = {
   2: { iter: 3, queries: 4, sources: 4, maxLen: 1500 },
   3: { iter: 4, queries: 5, sources: 5, maxLen: 2000 }
 };
-// Groq free tier: 12,000 TPM limit — use tighter limits (Japanese ~1.5 tokens/char)
-var GROQ_MAX_LEN   = 600;  // per source when reading
-var GROQ_SYNTH_LEN = 400;  // per source in final synthesis
+// Groq free tier: 12,000 TPM = input+max_tokens per request (Japanese ~1.5 tokens/char)
+var GROQ_MAX_LEN    = 400;  // per source when reading
+var GROQ_SYNTH_LEN  = 250;  // per source in final synthesis (6 sources × 250 = 1500 chars ≈ 750 tokens)
+var GROQ_MAX_SRC    = 4;    // max sources to include in synthesis
 
 // ─────────────────────────────────────────────
 // State
@@ -580,13 +581,16 @@ function geminiStream(messages, apiKey, onChunk) {
 // ─────────────────────────────────────────────
 var GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 var GROQ_MODEL = 'llama-3.3-70b-versatile';
+// Groq free: 12,000 TPM = input + max_tokens combined per request
+var GROQ_JSON_TOKENS   = 1024;
+var GROQ_STREAM_TOKENS = 2500;
 
 function groqJSON(messages, apiKey) {
   return fetch(GROQ_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
     body: JSON.stringify({
-      model: GROQ_MODEL, max_tokens: 2048, temperature: 0.2,
+      model: GROQ_MODEL, max_tokens: GROQ_JSON_TOKENS, temperature: 0.2,
       messages: messages.map(function(m){ return { role: 'user', content: m.content }; })
     }),
     signal: abort && abort.signal
@@ -606,7 +610,7 @@ function groqStream(messages, apiKey, onChunk) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
     body: JSON.stringify({
-      model: GROQ_MODEL, max_tokens: 8192, temperature: 0.6, stream: true,
+      model: GROQ_MODEL, max_tokens: GROQ_STREAM_TOKENS, temperature: 0.6, stream: true,
       messages: messages.map(function(m){ return { role: 'user', content: m.content }; })
     }),
     signal: abort && abort.signal
@@ -785,7 +789,8 @@ async function deepResearch(query, apiKey, jinaKey) {
     $('rptCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 200);
 
-  var srcCtx = sources.map(function(s,i){
+  var synthSources = isGroq ? sources.slice(0, GROQ_MAX_SRC) : sources;
+  var srcCtx = synthSources.map(function(s,i){
     return '[' + (i+1) + '] ' + s.title + '\nURL: ' + s.url + '\n\n' + s.content.slice(0, synthLen);
   }).join('\n\n---\n\n');
 
