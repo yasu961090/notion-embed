@@ -184,6 +184,16 @@ textarea { resize: none; line-height: 1.55; }
   <span class="lbl" style="margin-top:12px">Anthropic API Key</span>
   <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
 
+  <details style="margin-top:10px">
+    <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
+      <span id="jArrow" style="font-size:9px;transition:transform .2s">▶</span> Jina AI Key（オプション・Webページ取得精度向上）
+    </summary>
+    <div style="margin-top:8px">
+      <input type="password" id="jinaKey" placeholder="jina_... （jina.ai で無料取得）" autocomplete="off">
+      <p style="font-size:10px;color:var(--dim);margin-top:5px">未入力の場合はWikipediaフォールバックを使用。Jinaキーあり = 任意Webページを取得可能。</p>
+    </div>
+  </details>
+
   <div style="margin-top:12px">
     <span class="lbl">調査の深さ</span>
     <div class="depth-row">
@@ -409,35 +419,91 @@ function parseMd(md) {
 // ─────────────────────────────────────────────
 // API wrappers
 // ─────────────────────────────────────────────
-function jinaSearch(query) {
-  cntSearch++; updStats();
-  return fetch(JSEARCH + encodeURIComponent(query), {
-    headers: { 'Accept': 'application/json', 'X-Return-Format': 'json' },
-    signal: abort && abort.signal
-  }).then(function(r) {
-    if (!r.ok) throw new Error('Jina search ' + r.status);
-    return r.json();
-  }).then(function(j) {
-    return j.data || [];
-  }).catch(function(e) {
-    if (e.name === 'AbortError') throw e;
-    log('検索エラー: ' + query, 'warn');
-    return [];
+
+// Wikipedia search (free, CORS-friendly, no key needed)
+function wikiSearch(query) {
+  var langs = ['ja', 'en'];
+  var promises = langs.map(function(lang) {
+    var url = 'https://' + lang + '.wikipedia.org/w/api.php?action=query&list=search' +
+      '&srsearch=' + encodeURIComponent(query) +
+      '&format=json&srlimit=5&origin=*';
+    return fetch(url, { signal: abort && abort.signal })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var hits = (d.query && d.query.search) || [];
+        return hits.map(function(h) {
+          return {
+            url: 'https://' + lang + '.wikipedia.org/wiki/' + encodeURIComponent(h.title.replace(/ /g,'_')),
+            title: h.title,
+            description: h.snippet.replace(/<[^>]*>/g,'')
+          };
+        });
+      })
+      .catch(function(e) { if (e.name === 'AbortError') throw e; return []; });
+  });
+  return Promise.all(promises).then(function(arr) {
+    return arr.reduce(function(a,b){ return a.concat(b); }, []);
   });
 }
 
-function jinaRead(url, maxLen) {
-  return fetch(JREAD + url, {
-    signal: abort && abort.signal
-  }).then(function(r) {
-    if (!r.ok) return '';
-    return r.text();
-  }).then(function(t) {
-    return t.slice(0, maxLen || 2500);
-  }).catch(function(e) {
-    if (e.name === 'AbortError') throw e;
-    return '';
-  });
+// Wikipedia article content (for Wikipedia URLs, no Jina needed)
+function wikiContent(url, maxLen) {
+  var m = url.match(/wikipedia\.org\/wiki\/(.+)/);
+  if (!m) return Promise.resolve('');
+  var lang = url.includes('ja.wikipedia') ? 'ja' : 'en';
+  var title = decodeURIComponent(m[1]);
+  var apiUrl = 'https://' + lang + '.wikipedia.org/w/api.php?action=query' +
+    '&titles=' + encodeURIComponent(title) +
+    '&prop=extracts&explaintext=1&exsectionformat=plain&format=json&origin=*';
+  return fetch(apiUrl, { signal: abort && abort.signal })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var pages = d.query && d.query.pages;
+      if (!pages) return '';
+      var page = Object.values(pages)[0];
+      return (page.extract || '').slice(0, maxLen || 3000);
+    })
+    .catch(function(e) { if (e.name === 'AbortError') throw e; return ''; });
+}
+
+function jinaSearch(query, jinaKey) {
+  cntSearch++; updStats();
+  var headers = { 'Accept': 'application/json', 'X-Return-Format': 'json' };
+  if (jinaKey) headers['Authorization'] = 'Bearer ' + jinaKey;
+
+  return fetch(JSEARCH + encodeURIComponent(query), { headers: headers, signal: abort && abort.signal })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Jina ' + r.status);
+      return r.json();
+    })
+    .then(function(j) { return j.data || []; })
+    .catch(function(e) {
+      if (e.name === 'AbortError') throw e;
+      log('  Jinaフォールバック → Wikipedia検索', 'warn');
+      return wikiSearch(query);
+    });
+}
+
+function jinaRead(url, jinaKey, maxLen) {
+  // Wikipedia URLs: use Wikipedia API directly (no CORS issues)
+  if (url.includes('wikipedia.org/wiki/')) {
+    return wikiContent(url, maxLen);
+  }
+
+  // Other URLs: try Jina Reader (with key if available)
+  var headers = {};
+  if (jinaKey) headers['Authorization'] = 'Bearer ' + jinaKey;
+
+  return fetch(JREAD + url, { headers: headers, signal: abort && abort.signal })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Jread ' + r.status);
+      return r.text();
+    })
+    .then(function(t) { return t.slice(0, maxLen || 2500); })
+    .catch(function(e) {
+      if (e.name === 'AbortError') throw e;
+      return '';
+    });
 }
 
 function claudeJSON(messages, apiKey) {
@@ -504,7 +570,7 @@ function claudeStream(messages, apiKey, onChunk) {
 // ─────────────────────────────────────────────
 // Deep research pipeline
 // ─────────────────────────────────────────────
-async function deepResearch(query, apiKey) {
+async function deepResearch(query, apiKey, jinaKey) {
   var cfg = DEPTHS[depth];
   sources = []; cntSrc = 0; cntSearch = 0; cntIter = 0; rawReport = '';
   $('cntIterMax').textContent = cfg.iter;
@@ -541,7 +607,7 @@ async function deepResearch(query, apiKey) {
     var allHits = [];
     var searchPromises = currentQueries.map(function(q) {
       log('  ↳ "' + q + '"');
-      return jinaSearch(q).then(function(r) { allHits = allHits.concat(r); });
+      return jinaSearch(q, jinaKey).then(function(r) { allHits = allHits.concat(r); });
     });
     await Promise.all(searchPromises);
 
@@ -585,7 +651,7 @@ async function deepResearch(query, apiKey) {
       if (visited.has(src.url)) return null;
       visited.add(src.url);
       log('📖 ' + (src.title || src.url).slice(0, 55) + '...');
-      var content = await jinaRead(src.url, cfg.maxLen).catch(function(e){
+      var content = await jinaRead(src.url, jinaKey, cfg.maxLen).catch(function(e){
         if (e.name === 'AbortError') throw e;
         return '';
       });
@@ -691,6 +757,7 @@ async function deepResearch(query, apiKey) {
 async function startResearch() {
   var query = $('queryInput').value.trim();
   var apiKey = $('apiKey').value.trim();
+  var jinaKey = $('jinaKey').value.trim();
 
   clearErr();
   if (!query) { showErr('リサーチ質問を入力してください。'); return; }
@@ -699,6 +766,10 @@ async function startResearch() {
   }
 
   try { localStorage.setItem('dr_key', apiKey); } catch(e) {}
+  try { if (jinaKey) localStorage.setItem('dr_jina', jinaKey); } catch(e) {}
+
+  if (jinaKey) log('🔑 Jina AI Keyあり — 任意のWebページを取得可能');
+  else log('ℹ️ Jina AI Keyなし — Wikipedia検索をフォールバックとして使用');
 
   $('startBtn').disabled = true;
   $('progCard').style.display = 'block';
@@ -712,7 +783,7 @@ async function startResearch() {
   abort = new AbortController();
 
   try {
-    await deepResearch(query, apiKey);
+    await deepResearch(query, apiKey, jinaKey);
   } catch(e) {
     if (e.name === 'AbortError') {
       log('調査を停止しました。', 'warn');
@@ -739,7 +810,15 @@ document.addEventListener('DOMContentLoaded', function() {
   try {
     var saved = localStorage.getItem('dr_key');
     if (saved) $('apiKey').value = saved;
+    var savedJina = localStorage.getItem('dr_jina');
+    if (savedJina) $('jinaKey').value = savedJina;
   } catch(e) {}
+
+  // Toggle arrow on details open/close
+  var det = document.querySelector('details');
+  if (det) det.addEventListener('toggle', function() {
+    $('jArrow').style.transform = det.open ? 'rotate(90deg)' : '';
+  });
 
   $('queryInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startResearch();
