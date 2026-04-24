@@ -181,8 +181,11 @@ textarea { resize: none; line-height: 1.55; }
   <textarea id="queryInput" rows="4"
     placeholder="例: 量子コンピュータの現状と2030年への展望&#10;例: LLMの最新アーキテクチャトレンドと実用化状況&#10;例: 日本の少子化対策の効果と課題&#10;&#10;Cmd+Enter で開始"></textarea>
 
-  <span class="lbl" style="margin-top:12px">Anthropic API Key</span>
-  <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+  <span class="lbl" style="margin-top:12px">Google AI API Key（無料）</span>
+  <input type="password" id="apiKey" placeholder="AIzaSy..." autocomplete="off">
+  <p style="font-size:10px;color:var(--dim);margin-top:4px">
+    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--blue)">aistudio.google.com</a> で無料取得 — Gemini 2.0 Flash を使用
+  </p>
 
   <details style="margin-top:10px">
     <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
@@ -258,10 +261,9 @@ textarea { resize: none; line-height: 1.55; }
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-var CLAUDE = 'https://api.anthropic.com/v1/messages';
+var GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash';
 var JSEARCH = 'https://s.jina.ai/';
 var JREAD   = 'https://r.jina.ai/';
-var MODEL   = 'claude-sonnet-4-6';
 
 var DEPTHS = {
   1: { iter: 2, queries: 3, sources: 3, maxLen: 2500 },
@@ -506,41 +508,41 @@ function jinaRead(url, jinaKey, maxLen) {
     });
 }
 
-function claudeJSON(messages, apiKey) {
-  return fetch(CLAUDE, {
+function geminiJSON(messages, apiKey) {
+  var prompt = messages.map(function(m){ return m.content; }).join('\n');
+  var url = GEMINI_BASE + ':generateContent?key=' + apiKey;
+  return fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: 2048, temperature: 0.2, messages: messages }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+    }),
     signal: abort && abort.signal
   }).then(function(r) {
-    if (!r.ok) return r.json().then(function(e){ throw new Error(e.error && e.error.message || 'Claude API ' + r.status); });
+    if (!r.ok) return r.json().then(function(e){ throw new Error((e.error && e.error.message) || 'Gemini API ' + r.status); });
     return r.json();
   }).then(function(d) {
-    var text = d.content && d.content[0] && d.content[0].text || '';
+    var text = d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0] && d.candidates[0].content.parts[0].text || '';
     var m = text.match(/\{[\s\S]*\}/);
     if (!m) throw new Error('JSONが見つかりません');
     return JSON.parse(m[0]);
   });
 }
 
-function claudeStream(messages, apiKey, onChunk) {
-  return fetch(CLAUDE, {
+function geminiStream(messages, apiKey, onChunk) {
+  var prompt = messages.map(function(m){ return m.content; }).join('\n');
+  var url = GEMINI_BASE + ':streamGenerateContent?key=' + apiKey + '&alt=sse';
+  return fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8192, temperature: 0.6, stream: true, messages: messages }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.6, maxOutputTokens: 8192 }
+    }),
     signal: abort && abort.signal
   }).then(function(r) {
-    if (!r.ok) return r.json().then(function(e){ throw new Error(e.error && e.error.message || 'Stream error ' + r.status); });
+    if (!r.ok) return r.json().then(function(e){ throw new Error((e.error && e.error.message) || 'Gemini stream ' + r.status); });
     var reader = r.body.getReader();
     var dec = new TextDecoder();
     var buf = '';
@@ -556,8 +558,8 @@ function claudeStream(messages, apiKey, onChunk) {
           if (data === '[DONE]') return;
           try {
             var ev = JSON.parse(data);
-            if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta')
-              onChunk(ev.delta.text);
+            var text = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts && ev.candidates[0].content.parts[0] && ev.candidates[0].content.parts[0].text;
+            if (text) onChunk(text);
           } catch(e) {}
         });
         return read();
@@ -583,7 +585,7 @@ async function deepResearch(query, apiKey, jinaKey) {
   setPhase(1);
   log('🧠 リサーチ戦略を立案中...');
 
-  strategy = await claudeJSON([{
+  strategy = await geminiJSON([{
     role: 'user',
     content:
       'You are an expert research strategist. For the research question below, generate ' + cfg.queries + ' diverse search queries (mix of Japanese and English) to gather comprehensive information from multiple angles.\n\n' +
@@ -624,7 +626,7 @@ async function deepResearch(query, apiKey, jinaKey) {
     var selectedIdx = [];
     if (fresh.length > cfg.sources) {
       try {
-        var sel = await claudeJSON([{
+        var sel = await geminiJSON([{
           role: 'user',
           content:
             'Select the ' + cfg.sources + ' most relevant and authoritative sources.\n\n' +
@@ -668,7 +670,7 @@ async function deepResearch(query, apiKey, jinaKey) {
       setPhase(4);
       log('🔄 ギャップ分析 → フォローアップクエリ生成中...');
       try {
-        var analysis = await claudeJSON([{
+        var analysis = await geminiJSON([{
           role: 'user',
           content:
             'Analyze the gathered information and identify knowledge gaps. Generate ' + cfg.queries + ' targeted follow-up queries.\n\n' +
@@ -704,7 +706,7 @@ async function deepResearch(query, apiKey, jinaKey) {
     return '[' + (i+1) + '] ' + s.title + '\nURL: ' + s.url + '\n\n' + s.content;
   }).join('\n\n' + '═'.repeat(60) + '\n\n');
 
-  await claudeStream([{
+  await geminiStream([{
     role: 'user',
     content:
       'You are a world-class research analyst. Write a comprehensive, insightful research report in JAPANESE.\n\n' +
@@ -761,8 +763,8 @@ async function startResearch() {
 
   clearErr();
   if (!query) { showErr('リサーチ質問を入力してください。'); return; }
-  if (!apiKey || !apiKey.startsWith('sk-ant-')) {
-    showErr('有効な Anthropic API Key を入力してください（sk-ant-...）'); return;
+  if (!apiKey || !apiKey.startsWith('AIza')) {
+    showErr('有効な Google AI API Key を入力してください（AIzaSy...）'); return;
   }
 
   try { localStorage.setItem('dr_key', apiKey); } catch(e) {}
