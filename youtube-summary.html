@@ -426,7 +426,7 @@ async function summarize() {
     var res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai', seed: 42, private: true })
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai-fast', seed: 42, private: true })
     });
     if (!res.ok) throw new Error('エラー (' + res.status + ')');
     var raw = await res.text();
@@ -434,13 +434,29 @@ async function summarize() {
     var text = raw;
     try {
       var json = JSON.parse(raw);
+      // OpenAI Chat Completion format: choices[0].message.content
       if (json.choices && json.choices[0] && json.choices[0].message) {
-        text = json.choices[0].message.content || '';
-      } else if (typeof json.content === 'string') {
+        var msg = json.choices[0].message;
+        if (typeof msg.content === 'string') {
+          text = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          text = msg.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text||'';}).join('\n');
+        }
+      }
+      // Flat message object: {role, reasoning_content, content, ...}
+      else if (json.role === 'assistant') {
+        if (typeof json.content === 'string') {
+          text = json.content;
+        } else if (Array.isArray(json.content)) {
+          text = json.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text||'';}).join('\n');
+        }
+      }
+      // Simple {content: "..."} wrapper
+      else if (typeof json.content === 'string') {
         text = json.content;
       }
     } catch(e) {}
-    if (!text) throw new Error('結果が取得できませんでした');
+    if (!text || text.trim().charAt(0) === '{') throw new Error('結果が取得できませんでした');
     var titleHtml = displayTitle ? '<div class="doc-title">' + displayTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '';
     rawMarkdown = (displayTitle ? '# ' + displayTitle + '\n\n' : '') + text;
     $('mdBody').innerHTML = titleHtml + parseMarkdown(text);
