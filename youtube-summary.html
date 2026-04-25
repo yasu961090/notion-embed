@@ -376,19 +376,20 @@ async function summarize() {
     $('loaderSub').textContent = '';
 
     var contentText = ytContent.transcript || ytContent.description || '';
-    var contentLabel = ytContent.transcript ? '字幕テキスト' : (ytContent.description ? '動画説明欄' : '');
+    var contentLabel = ytContent.transcript ? '字幕テキスト' : '動画説明欄';
 
-    if (contentText) {
-      prompt = '以下のYouTube動画の' + contentLabel + 'を日本語で要約し、必ずMarkdown形式で出力してください。\n\n'
-        + (title ? 'タイトル: **' + title + '**\n' : '')
-        + 'URL: ' + cleanUrl + '\n\n--- ' + contentLabel + ' ---\n' + contentText + '\n--- ここまで ---\n'
-        + mdFormat(cleanUrl);
-    } else {
-      prompt = '以下のYouTube動画のタイトルをもとに内容を日本語で推測・要約し、必ずMarkdown形式で出力してください。\n\n'
-        + (title ? 'タイトル: **' + title + '**\n' : '')
-        + 'URL: ' + cleanUrl + '\n'
-        + mdFormat(cleanUrl);
+    if (!contentText) {
+      showError('字幕・説明文を取得できませんでした。字幕のない動画、非公開動画、または地域制限のある動画は対応できません。');
+      $('thumb').classList.remove('visible');
+      $('runBtn').disabled = false;
+      $('loader').classList.remove('visible');
+      return;
     }
+
+    prompt = '以下のYouTube動画の' + contentLabel + 'を日本語で要約し、必ずMarkdown形式で出力してください。\n\n'
+      + (title ? 'タイトル: **' + title + '**\n' : '')
+      + 'URL: ' + cleanUrl + '\n\n--- ' + contentLabel + ' ---\n' + contentText + '\n--- ここまで ---\n'
+      + mdFormat(cleanUrl);
 
   } else {
     $('loaderMsg').textContent = 'ページを取得中…';
