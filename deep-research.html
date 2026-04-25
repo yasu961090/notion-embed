@@ -192,11 +192,19 @@ textarea { resize: none; line-height: 1.55; }
 
   <details style="margin-top:10px">
     <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
-      <span id="jArrow" style="font-size:9px;transition:transform .2s">▶</span> Jina AI Key（オプション・Webページ取得精度向上）
+      <span id="jArrow" style="font-size:9px;transition:transform .2s">▶</span> 検索・読込強化キー（オプション・精度向上）
     </summary>
-    <div style="margin-top:8px">
-      <input type="password" id="jinaKey" placeholder="jina_... （jina.ai で無料取得）" autocomplete="off">
-      <p style="font-size:10px;color:var(--dim);margin-top:5px">未入力の場合はWikipediaフォールバックを使用。Jinaキーあり = 任意Webページを取得可能。</p>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+      <div>
+        <span class="lbl">Brave Search Key <span style="color:var(--green);font-weight:600">推奨</span></span>
+        <input type="password" id="braveKey" placeholder="BSA... （search.brave.com で無料2000回/月）" autocomplete="off">
+        <p style="font-size:10px;color:var(--dim);margin-top:3px">未入力 = Wikipediaのみ。入力すると一般Webを検索可能。</p>
+      </div>
+      <div>
+        <span class="lbl">Jina AI Key</span>
+        <input type="password" id="jinaKey" placeholder="jina_... （jina.ai で無料）" autocomplete="off">
+        <p style="font-size:10px;color:var(--dim);margin-top:3px">未入力 = Wikipedia記事のみ読込。入力すると任意URLを全文読込可能。</p>
+      </div>
     </div>
   </details>
 
@@ -475,44 +483,55 @@ function wikiContent(url, maxLen) {
     .catch(function(e) { if (e.name === 'AbortError') throw e; return ''; });
 }
 
-function jinaSearch(query, jinaKey) {
-  cntSearch++; updStats();
-  var headers = { 'Accept': 'application/json', 'X-Return-Format': 'json' };
-  if (jinaKey) headers['Authorization'] = 'Bearer ' + jinaKey;
-
-  return fetch(JSEARCH + encodeURIComponent(query), { headers: headers, signal: abort && abort.signal })
-    .then(function(r) {
-      if (!r.ok) throw new Error('Jina ' + r.status);
-      return r.json();
-    })
-    .then(function(j) { return j.data || []; })
-    .catch(function(e) {
-      if (e.name === 'AbortError') throw e;
-      log('  Jinaフォールバック → Wikipedia検索', 'warn');
-      return wikiSearch(query);
+// Brave Search — general web, free 2000 req/month
+function braveSearch(query, braveKey) {
+  var url = 'https://api.search.brave.com/res/v1/web/search?q=' +
+    encodeURIComponent(query) + '&count=6&search_lang=ja&country=jp';
+  return fetch(url, {
+    headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveKey },
+    signal: abort && abort.signal
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('Brave ' + r.status);
+    return r.json();
+  })
+  .then(function(d) {
+    var results = (d.web && d.web.results) || [];
+    return results.map(function(r) {
+      return { url: r.url, title: r.title, description: r.description || '', snippet: r.description || '' };
     });
+  })
+  .catch(function(e) {
+    if (e.name === 'AbortError') throw e;
+    log('  Brave失敗 → Wikipediaフォールバック', 'warn');
+    return wikiSearch(query);
+  });
 }
 
-function jinaRead(url, jinaKey, maxLen) {
-  // Wikipedia URLs: use Wikipedia API directly (no CORS issues)
+// Unified search: Brave → Wikipedia fallback
+function webSearch(query, braveKey) {
+  cntSearch++; updStats();
+  if (braveKey) return braveSearch(query, braveKey);
+  return wikiSearch(query);
+}
+
+// Read a URL: Wikipedia API / Jina Reader / snippet fallback
+function readURL(url, jinaKey, maxLen, snippet) {
   if (url.includes('wikipedia.org/wiki/')) {
     return wikiContent(url, maxLen);
   }
-
-  // Other URLs: try Jina Reader (with key if available)
-  var headers = {};
-  if (jinaKey) headers['Authorization'] = 'Bearer ' + jinaKey;
-
-  return fetch(JREAD + url, { headers: headers, signal: abort && abort.signal })
-    .then(function(r) {
-      if (!r.ok) throw new Error('Jread ' + r.status);
-      return r.text();
-    })
-    .then(function(t) { return t.slice(0, maxLen || 2500); })
-    .catch(function(e) {
-      if (e.name === 'AbortError') throw e;
-      return '';
-    });
+  if (jinaKey) {
+    var headers = { 'Authorization': 'Bearer ' + jinaKey };
+    return fetch(JREAD + url, { headers: headers, signal: abort && abort.signal })
+      .then(function(r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function(t) { return t.slice(0, maxLen || 2500); })
+      .catch(function(e) {
+        if (e.name === 'AbortError') throw e;
+        return snippet || '';
+      });
+  }
+  // No Jina key and not Wikipedia: use search snippet as content
+  return Promise.resolve(snippet || '');
 }
 
 function geminiJSON(messages, apiKey) {
@@ -655,12 +674,14 @@ function aiStream(messages, apiKey, onChunk) {
 // ─────────────────────────────────────────────
 // Deep research pipeline
 // ─────────────────────────────────────────────
-async function deepResearch(query, apiKey, jinaKey) {
+async function deepResearch(query, apiKey, jinaKey, braveKey) {
   var cfg = DEPTHS[depth];
   var isGroq = apiKey.startsWith('gsk_');
   var readLen  = isGroq ? GROQ_MAX_LEN   : cfg.maxLen;
   var synthLen = isGroq ? GROQ_SYNTH_LEN : cfg.maxLen;
   if (isGroq) log('⚡ Groq モード — トークン節約設定で動作中');
+  if (braveKey) log('🔍 Brave Search 有効 — 一般Webを検索します');
+  else log('ℹ️ 検索ソース: Wikipedia のみ（Brave Keyなし）');
   sources = []; cntSrc = 0; cntSearch = 0; cntIter = 0; rawReport = '';
   $('cntIterMax').textContent = cfg.iter;
   updStats();
@@ -696,7 +717,7 @@ async function deepResearch(query, apiKey, jinaKey) {
     var allHits = [];
     var searchPromises = currentQueries.map(function(q) {
       log('  ↳ "' + q + '"');
-      return jinaSearch(q, jinaKey).then(function(r) { allHits = allHits.concat(r); });
+      return webSearch(q, braveKey).then(function(r) { allHits = allHits.concat(r); });
     });
     await Promise.all(searchPromises);
 
@@ -740,11 +761,11 @@ async function deepResearch(query, apiKey, jinaKey) {
       if (visited.has(src.url)) return null;
       visited.add(src.url);
       log('📖 ' + (src.title || src.url).slice(0, 55) + '...');
-      var content = await jinaRead(src.url, jinaKey, readLen).catch(function(e){
+      var content = await readURL(src.url, jinaKey, readLen, src.description || src.snippet || '').catch(function(e){
         if (e.name === 'AbortError') throw e;
-        return '';
+        return src.description || src.snippet || '';
       });
-      if (!content || content.length < 80) return null;
+      if (!content || content.length < 30) return null;
       cntSrc++; updStats();
       return { url: src.url, title: src.title || src.url, content: content, iter: iter+1 };
     });
@@ -833,9 +854,10 @@ async function deepResearch(query, apiKey, jinaKey) {
 // Start / Stop
 // ─────────────────────────────────────────────
 async function startResearch() {
-  var query = $('queryInput').value.trim();
-  var apiKey = $('apiKey').value.trim();
-  var jinaKey = $('jinaKey').value.trim();
+  var query    = $('queryInput').value.trim();
+  var apiKey   = $('apiKey').value.trim();
+  var jinaKey  = $('jinaKey').value.trim();
+  var braveKey = $('braveKey').value.trim();
 
   clearErr();
   if (!query) { showErr('リサーチ質問を入力してください。'); return; }
@@ -844,10 +866,8 @@ async function startResearch() {
   }
 
   try { localStorage.setItem('dr_key', apiKey); } catch(e) {}
-  try { if (jinaKey) localStorage.setItem('dr_jina', jinaKey); } catch(e) {}
-
-  if (jinaKey) log('🔑 Jina AI Keyあり — 任意のWebページを取得可能');
-  else log('ℹ️ Jina AI Keyなし — Wikipedia検索をフォールバックとして使用');
+  try { if (jinaKey)  localStorage.setItem('dr_jina', jinaKey); } catch(e) {}
+  try { if (braveKey) localStorage.setItem('dr_brave', braveKey); } catch(e) {};
 
   $('startBtn').disabled = true;
   $('progCard').style.display = 'block';
@@ -861,7 +881,7 @@ async function startResearch() {
   abort = new AbortController();
 
   try {
-    await deepResearch(query, apiKey, jinaKey);
+    await deepResearch(query, apiKey, jinaKey, braveKey);
   } catch(e) {
     if (e.name === 'AbortError') {
       log('調査を停止しました。', 'warn');
@@ -890,6 +910,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saved) $('apiKey').value = saved;
     var savedJina = localStorage.getItem('dr_jina');
     if (savedJina) $('jinaKey').value = savedJina;
+    var savedBrave = localStorage.getItem('dr_brave');
+    if (savedBrave) $('braveKey').value = savedBrave;
   } catch(e) {}
 
   // Toggle arrow on details open/close
