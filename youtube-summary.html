@@ -429,7 +429,17 @@ async function summarize() {
       body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai', seed: 42, private: true })
     });
     if (!res.ok) throw new Error('エラー (' + res.status + ')');
-    var text = await res.text();
+    var raw = await res.text();
+    if (!raw) throw new Error('結果が取得できませんでした');
+    var text = raw;
+    try {
+      var json = JSON.parse(raw);
+      if (json.choices && json.choices[0] && json.choices[0].message) {
+        text = json.choices[0].message.content || '';
+      } else if (typeof json.content === 'string') {
+        text = json.content;
+      }
+    } catch(e) {}
     if (!text) throw new Error('結果が取得できませんでした');
     var titleHtml = displayTitle ? '<div class="doc-title">' + displayTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '';
     rawMarkdown = (displayTitle ? '# ' + displayTitle + '\n\n' : '') + text;
